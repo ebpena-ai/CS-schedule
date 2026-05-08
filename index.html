@@ -1140,6 +1140,49 @@
   .view-only-banner { display:none; background:#fef9c3; border-bottom:1px solid #fde68a; padding:7px 18px; font-size:13px; color:#92400e; align-items:center; gap:10px; }
   .view-only-banner strong { font-weight:700; }
 
+
+  /* ============= Metrics Tab ============= */
+  .admin-tab { position: relative; }
+  .admin-only { display: none; }
+  body.admin .admin-only { display: block; }
+  body.admin .admin-tab { display: inline-block; }
+  body:not(.admin) .admin-tab { display: none; }
+  .admin-badge { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; border-radius: 10px; padding: 2px 8px; font-size: 10px; font-weight: 700; letter-spacing: .4px; vertical-align: middle; margin-left: 6px; }
+  .metrics-wrap { padding: 18px; display: flex; flex-direction: column; gap: 18px; max-width: 1200px; margin: 0 auto; }
+  .metrics-card { background: #fff; border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,.08); border: 1px solid var(--line); overflow: hidden; }
+  .metrics-card-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid var(--line); background: #f8fafc; flex-wrap: wrap; gap: 10px; }
+  .metrics-card-header h3 { margin: 0; font-size: 15px; font-weight: 700; color: var(--ink); }
+  .metrics-date-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .metrics-date-row label { font-size: 13px; display: flex; align-items: center; gap: 6px; }
+  .metrics-date-row input[type=date] { padding: 5px 8px; border: 1px solid var(--line-strong); border-radius: 5px; font-size: 13px; }
+  .metrics-entry-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 18px; padding: 18px; }
+  .metrics-group { display: flex; flex-direction: column; gap: 8px; }
+  .metrics-group-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; color: var(--primary); margin-bottom: 4px; }
+  .metrics-field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 600; color: var(--ink-soft); }
+  .metrics-field input { padding: 7px 10px; border: 1px solid var(--line-strong); border-radius: 5px; font-size: 14px; font-family: inherit; }
+  .metrics-field input:focus { outline: 2px solid var(--primary-soft); border-color: var(--primary); }
+  .metrics-kpi-row { display: flex; flex-wrap: wrap; gap: 12px; padding: 14px 18px; }
+  .kpi-card { background: #f8fafc; border: 1px solid var(--line); border-radius: 8px; padding: 12px 16px; min-width: 110px; text-align: center; }
+  .kpi-card.accent { background: var(--primary-soft); border-color: #bfdbfe; }
+  .kpi-card.green  { background: var(--good-soft); border-color: #bbf7d0; }
+  .kpi-card.red    { background: var(--bad-soft); border-color: #fca5a5; }
+  .kpi-val  { font-size: 22px; font-weight: 800; color: var(--ink); line-height: 1.2; }
+  .kpi-label{ font-size: 11px; color: var(--muted); margin-top: 3px; font-weight: 600; text-transform: uppercase; letter-spacing: .4px; }
+  .metrics-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .metrics-table th { background: #f8fafc; padding: 8px 12px; text-align: left; border-bottom: 2px solid var(--line); font-size: 11px; text-transform: uppercase; color: var(--ink-soft); font-weight: 700; white-space: nowrap; }
+  .metrics-table td { padding: 7px 12px; border-bottom: 1px solid var(--line); }
+  .metrics-table tfoot td { background: #eef2ff; font-weight: 700; color: var(--primary); border-top: 2px solid #c7d2fe; }
+  .metrics-table tr:last-child td { border-bottom: none; }
+  .target-compare { display: flex; flex-wrap: wrap; gap: 12px; padding: 0 18px 14px; }
+  .target-row { display: flex; align-items: center; gap: 10px; background: #f8fafc; border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; min-width: 220px; flex: 1; }
+  .target-row .t-label { font-size: 12px; color: var(--ink-soft); font-weight: 600; flex: 1; }
+  .target-row .t-bar-wrap { width: 100px; background: #e2e8f0; border-radius: 4px; height: 8px; overflow: hidden; }
+  .target-row .t-bar { height: 100%; border-radius: 4px; transition: width .4s; }
+  .target-row .t-pct { font-size: 12px; font-weight: 700; width: 42px; text-align: right; }
+  .revenue-client-row { display: flex; gap: 6px; align-items: center; margin-bottom: 6px; }
+  .revenue-client-row input { flex: 1; padding: 6px 8px; border: 1px solid var(--line-strong); border-radius: 4px; font-size: 13px; }
+  .revenue-client-row .rm-btn { background: none; border: none; color: var(--bad); cursor: pointer; font-size: 16px; padding: 2px 4px; }
+
   @media print {
     header.app, .toolbar, .add-row, .icon-btn, .dept-actions, .help { display: none !important; }
     body { background: #fff; }
@@ -1214,6 +1257,7 @@
   <button class="view-tab active" id="tab-schedule" onclick="switchView('schedule')">Schedule</button>
   <button class="view-tab" id="tab-dashboard" onclick="switchView('dashboard')">Dashboard</button>
   <button class="view-tab" id="tab-reports" onclick="switchView('reports')">Reports <span class="badge" id="reportsBadge" style="display:none">!</span></button>
+  <button class="view-tab admin-tab" id="tab-metrics" onclick="switchView('metrics')">📊 Metrics</button>
 </div>
 
 <div class="toolbar">
@@ -1364,6 +1408,149 @@
 
     </div>
   </div>
+
+  <!-- ============================================================ -->
+  <!-- METRICS TAB                                                  -->
+  <!-- ============================================================ -->
+  <div id="metricsContainer" style="display:none">
+    <div class="metrics-wrap">
+
+      <!-- Daily Operations Entry (all logged-in users) -->
+      <div class="metrics-card">
+        <div class="metrics-card-header">
+          <h3>📦 Daily Operations Entry</h3>
+          <div class="metrics-date-row">
+            <label>Date: <input type="date" id="metricsDate"></label>
+            <button class="btn-primary" onclick="saveMetricsDay()">Save Day</button>
+            <span id="metricsSaveStatus" style="font-size:12px;color:var(--good);display:none;">✓ Saved</span>
+          </div>
+        </div>
+        <div class="metrics-entry-grid">
+          <div class="metrics-group">
+            <div class="metrics-group-title">📬 Orders Fulfilled</div>
+            <label class="metrics-field">B2B Orders<input type="number" id="m_orders_b2b" min="0" placeholder="0"></label>
+            <label class="metrics-field">eCom Orders<input type="number" id="m_orders_ecom" min="0" placeholder="0"></label>
+          </div>
+          <div class="metrics-group">
+            <div class="metrics-group-title">🚢 Inbound Receiving</div>
+            <label class="metrics-field">Containers Received<input type="number" id="m_containers" min="0" placeholder="0"></label>
+            <label class="metrics-field">Pallets Received<input type="number" id="m_pallets" min="0" placeholder="0"></label>
+          </div>
+          <div class="metrics-group">
+            <div class="metrics-group-title">📤 Outbound Shipping</div>
+            <label class="metrics-field">Cartons Shipped (B2B)<input type="number" id="m_cartons_b2b" min="0" placeholder="0"></label>
+            <label class="metrics-field">Units Picked<input type="number" id="m_units_picked" min="0" placeholder="0"></label>
+            <label class="metrics-field">Units Shipped<input type="number" id="m_units_shipped" min="0" placeholder="0"></label>
+            <label class="metrics-field">Labels Applied<input type="number" id="m_labels" min="0" placeholder="0"></label>
+          </div>
+          <div class="metrics-group">
+            <div class="metrics-group-title">⏱ Labor</div>
+            <label class="metrics-field">Total Labor Hours<input type="number" id="m_labor_hours" min="0" step="0.5" placeholder="Auto from schedule"></label>
+            <label class="metrics-field" style="grid-column:span 1;">Notes<textarea id="m_notes" rows="2" placeholder="Any notes for this day…" style="width:100%;padding:6px 8px;border:1px solid var(--line-strong);border-radius:4px;font-size:13px;font-family:inherit;resize:vertical;"></textarea></label>
+          </div>
+        </div>
+      </div>
+
+      <!-- Productivity Summary (all logged-in users) -->
+      <div class="metrics-card" id="productivitySummary">
+        <div class="metrics-card-header"><h3>⚡ This Week — Productivity</h3></div>
+        <div class="metrics-kpi-row" id="productivityKPIs">
+          <div class="kpi-card"><div class="kpi-val" id="kpi_orders_total">—</div><div class="kpi-label">Total Orders</div></div>
+          <div class="kpi-card"><div class="kpi-val" id="kpi_cartons_total">—</div><div class="kpi-label">Cartons Shipped</div></div>
+          <div class="kpi-card"><div class="kpi-val" id="kpi_units_total">—</div><div class="kpi-label">Units Shipped</div></div>
+          <div class="kpi-card"><div class="kpi-val" id="kpi_labels_total">—</div><div class="kpi-label">Labels Applied</div></div>
+          <div class="kpi-card"><div class="kpi-val" id="kpi_containers_total">—</div><div class="kpi-label">Containers In</div></div>
+          <div class="kpi-card"><div class="kpi-val" id="kpi_labor_hours">—</div><div class="kpi-label">Labor Hours</div></div>
+          <div class="kpi-card accent"><div class="kpi-val" id="kpi_units_per_hr">—</div><div class="kpi-label">Units / Labor Hr</div></div>
+          <div class="kpi-card accent"><div class="kpi-val" id="kpi_orders_per_hr">—</div><div class="kpi-label">Orders / Labor Hr</div></div>
+        </div>
+        <!-- Daily breakdown table -->
+        <div style="overflow-x:auto;margin-top:14px;">
+          <table class="metrics-table" id="metricsWeekTable">
+            <thead><tr><th>Day</th><th>B2B Orders</th><th>eCom Orders</th><th>Cartons (B2B)</th><th>Units Shipped</th><th>Labels</th><th>Containers In</th><th>Labor Hrs</th></tr></thead>
+            <tbody id="metricsWeekBody"></tbody>
+            <tfoot id="metricsWeekFoot"></tfoot>
+          </table>
+        </div>
+      </div>
+
+      <!-- ADMIN-ONLY: Financial Summary -->
+      <div class="metrics-card admin-only" id="financialSummaryCard">
+        <div class="metrics-card-header">
+          <h3>💰 Weekly Financials <span class="admin-badge">Admin Only</span></h3>
+          <button class="btn-light" onclick="saveFinancials()">Save Financials</button>
+        </div>
+        <div class="metrics-entry-grid">
+          <div class="metrics-group">
+            <div class="metrics-group-title">Revenue</div>
+            <label class="metrics-field">Total Revenue ($)<input type="number" id="f_revenue_total" min="0" step="100" placeholder="0.00"></label>
+            <label class="metrics-field">Target Revenue ($)<input type="number" id="f_target_revenue" min="0" step="100" placeholder="0.00"></label>
+          </div>
+          <div class="metrics-group">
+            <div class="metrics-group-title">Payroll</div>
+            <label class="metrics-field">Total Payroll ($)<input type="number" id="f_payroll_total" min="0" step="100" placeholder="Auto-calculated"></label>
+            <label class="metrics-field">Target Payroll ($)<input type="number" id="f_target_payroll" min="0" step="100" placeholder="0.00"></label>
+          </div>
+          <div class="metrics-group">
+            <div class="metrics-group-title">Overhead & Margin</div>
+            <label class="metrics-field">Overhead ($)<input type="number" id="f_overhead" min="0" step="100" placeholder="0.00"></label>
+            <label class="metrics-field">Target Margin (%)<input type="number" id="f_target_margin" min="0" max="100" step="0.5" placeholder="35.0"></label>
+          </div>
+          <div class="metrics-group">
+            <div class="metrics-group-title">Revenue by Client</div>
+            <div id="revenueByClientWrap"></div>
+            <button class="btn-light" style="margin-top:6px;font-size:12px;" onclick="addRevenueClient()">+ Add Client</button>
+          </div>
+        </div>
+        <!-- Financial KPIs -->
+        <div class="metrics-kpi-row" id="financialKPIs" style="margin-top:14px;">
+          <div class="kpi-card green"><div class="kpi-val" id="fkpi_revenue">—</div><div class="kpi-label">Revenue</div></div>
+          <div class="kpi-card red"><div class="kpi-val" id="fkpi_payroll">—</div><div class="kpi-label">Payroll</div></div>
+          <div class="kpi-card red"><div class="kpi-val" id="fkpi_overhead">—</div><div class="kpi-label">Overhead</div></div>
+          <div class="kpi-card accent"><div class="kpi-val" id="fkpi_margin">—</div><div class="kpi-label">Gross Margin</div></div>
+          <div class="kpi-card accent"><div class="kpi-val" id="fkpi_margin_pct">—</div><div class="kpi-label">Margin %</div></div>
+          <div class="kpi-card"><div class="kpi-val" id="fkpi_cost_per_order">—</div><div class="kpi-label">Cost / Order</div></div>
+          <div class="kpi-card"><div class="kpi-val" id="fkpi_payroll_ratio">—</div><div class="kpi-label">Payroll / Revenue</div></div>
+        </div>
+        <!-- Target vs Actual -->
+        <div class="target-compare" id="targetCompare" style="margin-top:14px;"></div>
+      </div>
+
+      <!-- ADMIN-ONLY: Payroll by Department -->
+      <div class="metrics-card admin-only" id="payrollByDeptCard">
+        <div class="metrics-card-header">
+          <h3>👥 Payroll by Department <span class="admin-badge">Admin Only</span></h3>
+          <button class="btn-light" onclick="openRatesModal()">Edit Hourly Rates</button>
+        </div>
+        <table class="metrics-table" id="payrollDeptTable">
+          <thead><tr><th>Department</th><th>Avg Rate</th><th>Hours This Week</th><th>Est. Payroll</th><th>% of Total</th></tr></thead>
+          <tbody id="payrollDeptBody"></tbody>
+          <tfoot id="payrollDeptFoot"></tfoot>
+        </table>
+      </div>
+
+    </div><!-- /metrics-wrap -->
+  </div><!-- /metricsContainer -->
+
+  <!-- Hourly Rates Modal -->
+  <div class="modal-wrap" id="ratesModal" style="display:none;" onclick="if(event.target===this)closeRatesModal()">
+    <div class="modal">
+      <div class="modal-header"><h3>⚙ Average Hourly Rates by Department</h3><button class="icon-btn" onclick="closeRatesModal()">✕</button></div>
+      <div class="modal-body">
+        <p style="font-size:13px;color:var(--ink-soft);margin:0 0 14px;">Used to estimate weekly payroll from scheduled hours. These are saved to Supabase.</p>
+        <table class="metrics-table" id="ratesTable">
+          <thead><tr><th>Department</th><th>Avg Hourly Rate ($)</th></tr></thead>
+          <tbody id="ratesTableBody"></tbody>
+        </table>
+        <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:14px;">
+          <button class="btn-light" onclick="closeRatesModal()">Cancel</button>
+          <button class="btn-primary" onclick="saveRates()">Save Rates</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
 </main>
 
 <!-- Save preset modal -->
@@ -3406,12 +3593,17 @@ function switchView(view) {
   document.getElementById('tab-schedule').classList.toggle('active', view==='schedule');
   document.getElementById('tab-dashboard').classList.toggle('active', view==='dashboard');
   document.getElementById('tab-reports').classList.toggle('active', view==='reports');
+  const mTab = document.getElementById('tab-metrics');
+  if (mTab) mTab.classList.toggle('active', view==='metrics');
   document.getElementById('scheduleContainer').style.display  = view==='schedule'  ? '' : 'none';
   document.getElementById('dashboardContainer').style.display = view==='dashboard' ? '' : 'none';
   document.getElementById('reportsContainer').style.display   = view==='reports'   ? '' : 'none';
+  const mCont = document.getElementById('metricsContainer');
+  if (mCont) mCont.style.display = view==='metrics' ? '' : 'none';
   state.currentView = view;
   if (view === 'dashboard') renderDashboard();
   if (view === 'reports') { initReportsTab(); renderSavedReports(); }
+  if (view === 'metrics') { renderMetricsTab(); }
   try { localStorage.setItem(STORAGE_KEY+'_view', view); } catch(e){}
 }
 
@@ -3621,17 +3813,30 @@ async function doSignOut() {
   applyAuthState(null);
 }
 
-function applyAuthState(user) {
+async function applyAuthState(user) {
   currentUser = user;
   const btn = document.getElementById('authBtn');
   const body = document.body;
   if (user) {
     body.classList.remove('view-only');
+    // Fetch role from Supabase
+    let role = 'manager';
+    if (_sb) {
+      try {
+        const { data } = await _sb.from('user_roles').select('role').eq('user_id', user.id).maybeSingle();
+        if (data && data.role) role = data.role;
+      } catch(e) {}
+    }
+    currentUser.userRole = role;
+    if (role === 'admin') { body.classList.add('admin'); }
+    else { body.classList.remove('admin'); }
     btn.className = 'auth-chip logged-in';
-    btn.innerHTML = '<span class="dot"></span> ' + (user.email || 'Logged in') +
+    const roleChip = role === 'admin' ? ' <span style="background:#fef3c7;color:#92400e;border-radius:8px;padding:1px 7px;font-size:10px;font-weight:700;">Admin</span>' : '';
+    btn.innerHTML = '<span class="dot"></span> ' + (user.email || 'Logged in') + roleChip +
       ' &nbsp;<span style="font-weight:400;opacity:.7;font-size:11px;" onclick="event.stopPropagation();doSignOut()">Sign out</span>';
     btn.onclick = null;
   } else {
+    body.classList.remove('admin');
     body.classList.add('view-only');
     btn.className = 'auth-chip logged-out';
     btn.innerHTML = '<span class="dot"></span> Login to Edit';
@@ -3678,6 +3883,371 @@ function setupRealtimeSync() {
       }
     })
     .subscribe();
+}
+
+
+// ==== Metrics Tab ====
+
+let metricsData = {};    // { 'YYYY-MM-DD': { orders_b2b, ... } }
+let financialsData = {}; // { week_iso: { revenue_total, ... } }
+let deptRates = {};      // { deptId: rate }
+
+function metricsDateISO(d) {
+  const dt = d || new Date();
+  return dt.toISOString().slice(0,10);
+}
+
+async function loadMetricsForWeek(weekIso) {
+  if (!_sb || !currentUser) return;
+  const monday = new Date(weekIso + 'T00:00:00');
+  const sunday = new Date(monday); sunday.setDate(sunday.getDate() + 6);
+  const from = metricsDateISO(monday);
+  const to   = metricsDateISO(sunday);
+  try {
+    const { data } = await _sb.from('metrics_daily')
+      .select('*').gte('metric_date', from).lte('metric_date', to);
+    if (data) data.forEach(r => { metricsData[r.metric_date] = r; });
+  } catch(e) { console.warn('metrics load failed', e); }
+  // Load financials (admin only — Supabase RLS hides it for managers)
+  try {
+    const { data: fin } = await _sb.from('financials_weekly')
+      .select('*').eq('week_iso', weekIso).maybeSingle();
+    if (fin) financialsData[weekIso] = fin;
+  } catch(e) {}
+  // Load dept rates
+  try {
+    const { data: rates } = await _sb.from('dept_hourly_rates').select('*');
+    if (rates) rates.forEach(r => { deptRates[r.dept_id] = parseFloat(r.avg_rate); });
+  } catch(e) {}
+}
+
+async function saveMetricsDay() {
+  const date = document.getElementById('metricsDate').value;
+  if (!date) { alert('Please select a date'); return; }
+  const row = {
+    metric_date:         date,
+    orders_b2b:          parseInt(document.getElementById('m_orders_b2b').value)    || 0,
+    orders_ecom:         parseInt(document.getElementById('m_orders_ecom').value)   || 0,
+    containers_received: parseInt(document.getElementById('m_containers').value)    || 0,
+    pallets_received:    parseInt(document.getElementById('m_pallets').value)       || 0,
+    cartons_shipped_b2b: parseInt(document.getElementById('m_cartons_b2b').value)   || 0,
+    units_picked:        parseInt(document.getElementById('m_units_picked').value)  || 0,
+    units_shipped:       parseInt(document.getElementById('m_units_shipped').value) || 0,
+    labels_applied:      parseInt(document.getElementById('m_labels').value)        || 0,
+    labor_hours:         parseFloat(document.getElementById('m_labor_hours').value) || 0,
+    notes:               document.getElementById('m_notes').value.trim(),
+    entered_by:          currentUser ? currentUser.email : 'unknown',
+  };
+  metricsData[date] = row;
+  if (_sb && currentUser) {
+    try {
+      await _sb.from('metrics_daily').upsert(row, { onConflict: 'metric_date' });
+    } catch(e) { console.error('metrics save failed', e); }
+  }
+  const st = document.getElementById('metricsSaveStatus');
+  st.style.display = 'inline'; setTimeout(() => { st.style.display = 'none'; }, 2000);
+  renderMetricsWeekTable();
+  renderProductivityKPIs();
+  if (document.body.classList.contains('admin')) {
+    renderPayrollByDept();
+    renderFinancialKPIs();
+  }
+}
+
+async function saveFinancials() {
+  const week = state.currentWeekStart;
+  // Collect client revenues
+  const rows = document.querySelectorAll('#revenueByClientWrap .revenue-client-row');
+  const byClient = {};
+  rows.forEach(r => {
+    const name = r.querySelector('.client-name')?.value.trim();
+    const amt  = parseFloat(r.querySelector('.client-amt')?.value) || 0;
+    if (name) byClient[name] = amt;
+  });
+  const fin = {
+    week_iso:       week,
+    revenue_total:  parseFloat(document.getElementById('f_revenue_total').value)  || 0,
+    target_revenue: parseFloat(document.getElementById('f_target_revenue').value) || 0,
+    payroll_total:  parseFloat(document.getElementById('f_payroll_total').value)  || 0,
+    target_payroll: parseFloat(document.getElementById('f_target_payroll').value) || 0,
+    overhead:       parseFloat(document.getElementById('f_overhead').value)       || 0,
+    target_margin_pct: parseFloat(document.getElementById('f_target_margin').value) || 0,
+    revenue_by_client: byClient,
+    updated_by:     currentUser ? currentUser.email : 'unknown',
+  };
+  financialsData[week] = fin;
+  if (_sb && currentUser) {
+    try {
+      await _sb.from('financials_weekly').upsert(fin, { onConflict: 'week_iso' });
+    } catch(e) { console.error('financials save failed', e); }
+  }
+  renderFinancialKPIs();
+  renderTargetCompare();
+}
+
+function addRevenueClient(name, amt) {
+  const wrap = document.getElementById('revenueByClientWrap');
+  const div = document.createElement('div');
+  div.className = 'revenue-client-row';
+  div.innerHTML = `<input class="client-name" placeholder="Client name" value="${name||''}">
+    <input class="client-amt" type="number" placeholder="$0.00" min="0" step="100" value="${amt||''}">
+    <button class="rm-btn" onclick="this.closest('.revenue-client-row').remove();renderFinancialKPIs();">✕</button>`;
+  wrap.appendChild(div);
+}
+
+function getWeekDates(weekIso) {
+  const dates = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(weekIso + 'T00:00:00');
+    d.setDate(d.getDate() + i);
+    dates.push(metricsDateISO(d));
+  }
+  return dates;
+}
+
+function getWeekScheduledHours() {
+  // Sum WORK hours from schedule for current week, return { total, byDept }
+  const week = state.currentWeekStart;
+  const sched = (state.schedules && state.schedules[week]) || {};
+  let total = 0;
+  const byDept = {};
+  (state.roster || []).forEach(dept => {
+    let dHours = 0;
+    const dSched = sched[dept.id] || {};
+    dept.people.forEach((p, pi) => {
+      const pSched = dSched[pi] || {};
+      for (let di = 0; di < 7; di++) {
+        const cell = pSched[di];
+        if (cell && cell.status === 'WORK') {
+          const h = shiftHours(cell.start, cell.end);
+          dHours += h; total += h;
+        }
+      }
+    });
+    byDept[dept.id] = dHours;
+  });
+  return { total, byDept };
+}
+
+function renderMetricsWeekTable() {
+  const dates = getWeekDates(state.currentWeekStart);
+  const body = document.getElementById('metricsWeekBody');
+  const foot = document.getElementById('metricsWeekFoot');
+  if (!body) return;
+  const DAY_NAMES = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  let totals = { b2b:0, ecom:0, cartons:0, units:0, labels:0, containers:0, hours:0 };
+  body.innerHTML = dates.map((d, i) => {
+    const r = metricsData[d] || {};
+    totals.b2b       += r.orders_b2b || 0;
+    totals.ecom      += r.orders_ecom || 0;
+    totals.cartons   += r.cartons_shipped_b2b || 0;
+    totals.units     += r.units_shipped || 0;
+    totals.labels    += r.labels_applied || 0;
+    totals.containers+= r.containers_received || 0;
+    totals.hours     += r.labor_hours || 0;
+    const isEmpty = !metricsData[d];
+    return `<tr class="${isEmpty?'row-empty':''}">
+      <td><strong>${DAY_NAMES[i]}</strong> <span style="font-size:11px;color:var(--muted)">${d.slice(5)}</span></td>
+      <td>${r.orders_b2b||'—'}</td><td>${r.orders_ecom||'—'}</td>
+      <td>${r.cartons_shipped_b2b||'—'}</td><td>${r.units_shipped||'—'}</td>
+      <td>${r.labels_applied||'—'}</td><td>${r.containers_received||'—'}</td>
+      <td>${r.labor_hours||'—'}</td>
+    </tr>`;
+  }).join('');
+  foot.innerHTML = `<tr><td><strong>Total</strong></td>
+    <td><strong>${totals.b2b}</strong></td><td><strong>${totals.ecom}</strong></td>
+    <td><strong>${totals.cartons}</strong></td><td><strong>${totals.units}</strong></td>
+    <td><strong>${totals.labels}</strong></td><td><strong>${totals.containers}</strong></td>
+    <td><strong>${totals.hours.toFixed(1)}</strong></td></tr>`;
+}
+
+function renderProductivityKPIs() {
+  const dates = getWeekDates(state.currentWeekStart);
+  let orders=0, cartons=0, units=0, labels=0, containers=0, hours=0;
+  dates.forEach(d => {
+    const r = metricsData[d] || {};
+    orders     += (r.orders_b2b||0) + (r.orders_ecom||0);
+    cartons    += r.cartons_shipped_b2b || 0;
+    units      += r.units_shipped || 0;
+    labels     += r.labels_applied || 0;
+    containers += r.containers_received || 0;
+    hours      += r.labor_hours || 0;
+  });
+  // Fall back to schedule hours if no manual entry
+  if (!hours) hours = getWeekScheduledHours().total;
+  const setKPI = (id, val) => { const el = document.getElementById(id); if(el) el.textContent = val; };
+  setKPI('kpi_orders_total',   orders.toLocaleString());
+  setKPI('kpi_cartons_total',  cartons.toLocaleString());
+  setKPI('kpi_units_total',    units.toLocaleString());
+  setKPI('kpi_labels_total',   labels.toLocaleString());
+  setKPI('kpi_containers_total', containers.toLocaleString());
+  setKPI('kpi_labor_hours',    hours.toFixed(1) + ' hrs');
+  setKPI('kpi_units_per_hr',   hours > 0 ? (units/hours).toFixed(1) : '—');
+  setKPI('kpi_orders_per_hr',  hours > 0 ? (orders/hours).toFixed(1) : '—');
+}
+
+function renderPayrollByDept() {
+  const body = document.getElementById('payrollDeptBody');
+  const foot = document.getElementById('payrollDeptFoot');
+  if (!body) return;
+  const { total: totalHours, byDept } = getWeekScheduledHours();
+  let totalPayroll = 0;
+  const rows = (state.roster || []).map(dept => {
+    const hrs  = byDept[dept.id] || 0;
+    const rate = deptRates[dept.id] || 18;
+    const pay  = hrs * rate;
+    totalPayroll += pay;
+    return { name: dept.name, id: dept.id, hrs, rate, pay };
+  });
+  body.innerHTML = rows.map(r => `<tr>
+    <td>${r.name}</td>
+    <td>$${(deptRates[r.id]||18).toFixed(2)}/hr</td>
+    <td>${r.hrs.toFixed(1)}</td>
+    <td>$${r.pay.toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0})}</td>
+    <td>${totalPayroll > 0 ? ((r.pay/totalPayroll)*100).toFixed(1)+'%' : '—'}</td>
+  </tr>`).join('');
+  foot.innerHTML = `<tr><td><strong>Total</strong></td><td>—</td>
+    <td><strong>${totalHours.toFixed(1)} hrs</strong></td>
+    <td><strong>$${totalPayroll.toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0})}</strong></td>
+    <td>100%</td></tr>`;
+  // Auto-fill payroll field if empty
+  const pf = document.getElementById('f_payroll_total');
+  if (pf && (!pf.value || pf.value === '0')) pf.value = totalPayroll.toFixed(0);
+}
+
+function renderFinancialKPIs() {
+  const revenue  = parseFloat(document.getElementById('f_revenue_total')?.value)  || 0;
+  const payroll  = parseFloat(document.getElementById('f_payroll_total')?.value)  || 0;
+  const overhead = parseFloat(document.getElementById('f_overhead')?.value)       || 0;
+  const margin   = revenue - payroll - overhead;
+  const marginPct = revenue > 0 ? (margin/revenue*100) : 0;
+  const dates = getWeekDates(state.currentWeekStart);
+  let orders = 0;
+  dates.forEach(d => { const r = metricsData[d]||{}; orders += (r.orders_b2b||0)+(r.orders_ecom||0); });
+  const fmt = (n) => '$' + Math.round(n).toLocaleString();
+  const setEl = (id, val) => { const el = document.getElementById(id); if(el) el.textContent = val; };
+  setEl('fkpi_revenue',       fmt(revenue));
+  setEl('fkpi_payroll',       fmt(payroll));
+  setEl('fkpi_overhead',      fmt(overhead));
+  setEl('fkpi_margin',        fmt(margin));
+  setEl('fkpi_margin_pct',    marginPct.toFixed(1) + '%');
+  setEl('fkpi_cost_per_order',orders > 0 ? '$' + ((payroll+overhead)/orders).toFixed(2) : '—');
+  setEl('fkpi_payroll_ratio', revenue > 0 ? (payroll/revenue*100).toFixed(1)+'%' : '—');
+  renderTargetCompare();
+}
+
+function renderTargetCompare() {
+  const wrap = document.getElementById('targetCompare');
+  if (!wrap) return;
+  const revenue      = parseFloat(document.getElementById('f_revenue_total')?.value)  || 0;
+  const targetRev    = parseFloat(document.getElementById('f_target_revenue')?.value) || 0;
+  const payroll      = parseFloat(document.getElementById('f_payroll_total')?.value)  || 0;
+  const targetPay    = parseFloat(document.getElementById('f_target_payroll')?.value) || 0;
+  const marginPct    = revenue > 0 ? ((revenue-payroll-(parseFloat(document.getElementById('f_overhead')?.value)||0))/revenue*100) : 0;
+  const targetMargin = parseFloat(document.getElementById('f_target_margin')?.value) || 0;
+  const items = [
+    { label:'Revenue vs Target',   actual: revenue,    target: targetRev,    fmt: (n)=>'$'+Math.round(n).toLocaleString(), higherBetter: true },
+    { label:'Payroll vs Target',    actual: payroll,    target: targetPay,    fmt: (n)=>'$'+Math.round(n).toLocaleString(), higherBetter: false },
+    { label:'Margin % vs Target',   actual: marginPct,  target: targetMargin, fmt: (n)=>n.toFixed(1)+'%',                  higherBetter: true },
+  ];
+  wrap.innerHTML = items.map(item => {
+    if (!item.target) return '';
+    const pct = Math.min(100, item.target > 0 ? (item.actual/item.target*100) : 0);
+    const ok  = item.higherBetter ? item.actual >= item.target : item.actual <= item.target;
+    const color = ok ? '#22c55e' : '#ef4444';
+    return `<div class="target-row">
+      <div class="t-label">${item.label}<br><small>${item.fmt(item.actual)} / ${item.fmt(item.target)}</small></div>
+      <div class="t-bar-wrap"><div class="t-bar" style="width:${pct}%;background:${color}"></div></div>
+      <div class="t-pct" style="color:${color}">${pct.toFixed(0)}%</div>
+    </div>`;
+  }).join('');
+}
+
+async function renderMetricsTab() {
+  // Set date to today
+  const todayEl = document.getElementById('metricsDate');
+  if (todayEl && !todayEl.value) todayEl.value = metricsDateISO();
+  // Load data from Supabase
+  await loadMetricsForWeek(state.currentWeekStart);
+  // Load today's data into form
+  const todayData = metricsData[metricsDateISO()] || {};
+  const setVal = (id, val) => { const el = document.getElementById(id); if(el && val) el.value = val; };
+  setVal('m_orders_b2b',  todayData.orders_b2b);
+  setVal('m_orders_ecom', todayData.orders_ecom);
+  setVal('m_containers',  todayData.containers_received);
+  setVal('m_pallets',     todayData.pallets_received);
+  setVal('m_cartons_b2b', todayData.cartons_shipped_b2b);
+  setVal('m_units_picked',todayData.units_picked);
+  setVal('m_units_shipped',todayData.units_shipped);
+  setVal('m_labels',      todayData.labels_applied);
+  setVal('m_labor_hours', todayData.labor_hours);
+  setVal('m_notes',       todayData.notes);
+  // Render all sections
+  renderMetricsWeekTable();
+  renderProductivityKPIs();
+  if (document.body.classList.contains('admin')) {
+    renderPayrollByDept();
+    // Load financials form
+    const fin = financialsData[state.currentWeekStart] || {};
+    setVal('f_revenue_total',  fin.revenue_total);
+    setVal('f_target_revenue', fin.target_revenue);
+    setVal('f_payroll_total',  fin.payroll_total);
+    setVal('f_target_payroll', fin.target_payroll);
+    setVal('f_overhead',       fin.overhead);
+    setVal('f_target_margin',  fin.target_margin_pct);
+    // Revenue by client
+    const wrap = document.getElementById('revenueByClientWrap');
+    if (wrap) {
+      wrap.innerHTML = '';
+      const byClient = fin.revenue_by_client || {};
+      Object.entries(byClient).forEach(([name, amt]) => addRevenueClient(name, amt));
+    }
+    renderFinancialKPIs();
+  }
+}
+
+// Reload metrics when week changes
+const _origChangeWeek = changeWeek;
+changeWeek = function(dir) {
+  _origChangeWeek(dir);
+  if (state.currentView === 'metrics') renderMetricsTab();
+};
+
+// Hourly rates modal
+async function openRatesModal() {
+  if (_sb) {
+    try {
+      const { data } = await _sb.from('dept_hourly_rates').select('*');
+      if (data) data.forEach(r => { deptRates[r.dept_id] = parseFloat(r.avg_rate); });
+    } catch(e) {}
+  }
+  const body = document.getElementById('ratesTableBody');
+  body.innerHTML = (state.roster || []).map(dept => `<tr>
+    <td>${dept.name}</td>
+    <td><input type="number" step="0.50" min="10" max="100" value="${(deptRates[dept.id]||18).toFixed(2)}"
+         data-dept="${dept.id}" style="width:100px;padding:5px 8px;border:1px solid var(--line-strong);border-radius:4px;font-size:14px;"></td>
+  </tr>`).join('');
+  document.getElementById('ratesModal').style.display = 'flex';
+}
+function closeRatesModal() { document.getElementById('ratesModal').style.display = 'none'; }
+async function saveRates() {
+  const inputs = document.querySelectorAll('#ratesTableBody input[data-dept]');
+  const upserts = [];
+  inputs.forEach(inp => {
+    const id = inp.dataset.dept;
+    const rate = parseFloat(inp.value) || 18;
+    deptRates[id] = rate;
+    const dept = (state.roster||[]).find(d => d.id === id);
+    upserts.push({ dept_id: id, dept_name: dept?.name || id, avg_rate: rate });
+  });
+  if (_sb && currentUser) {
+    try {
+      await _sb.from('dept_hourly_rates').upsert(upserts, { onConflict: 'dept_id' });
+    } catch(e) { console.error('rates save failed', e); }
+  }
+  closeRatesModal();
+  renderPayrollByDept();
+  renderFinancialKPIs();
 }
 
 // ==== Init ====
