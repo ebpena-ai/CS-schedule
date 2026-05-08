@@ -1120,6 +1120,16 @@
   .ai-key-warning { background: var(--warn-soft); color: var(--warn); border: 1px solid #fcd34d; border-radius: 6px; padding: 10px 14px; font-size: 12px; margin: 12px 16px 0; line-height: 1.5; }
 
 
+
+  /* ============= Invoice Upload ============= */
+  #invoicePreviewBody tr.inv-matched td { background: #f0fdf4; }
+  #invoicePreviewBody tr.inv-unmatched td { background: #fef9c3; }
+  #invoicePreviewBody tr.inv-error td { background: var(--bad-soft); color: var(--bad); }
+  .inv-match-chip { display:inline-block; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:700; }
+  .inv-match-chip.ok  { background:var(--good-soft); color:var(--good); }
+  .inv-match-chip.warn{ background:#fef9c3; color:#92400e; }
+  .inv-match-chip.none{ background:var(--bad-soft); color:var(--bad); }
+
   /* ============= Auth / login ============= */
   .auth-chip { display:flex; align-items:center; gap:7px; padding:5px 12px; border-radius:20px; font-size:12px; font-weight:600; cursor:pointer; transition:all .15s; }
   .auth-chip.logged-out { background:var(--primary); color:#fff; border:none; }
@@ -1145,6 +1155,10 @@
   .admin-tab { position: relative; }
   .admin-only { display: none; }
   body.admin .admin-only { display: block; }
+  /* Metrics tab: visible to any logged-in user */
+  body.view-only #tab-metrics { display: none; }
+  body:not(.view-only) #tab-metrics { display: inline-block; }
+  /* Financials tab: admin only */
   body.admin .admin-tab { display: inline-block; }
   body:not(.admin) .admin-tab { display: none; }
   .admin-badge { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; border-radius: 10px; padding: 2px 8px; font-size: 10px; font-weight: 700; letter-spacing: .4px; vertical-align: middle; margin-left: 6px; }
@@ -1257,7 +1271,8 @@
   <button class="view-tab active" id="tab-schedule" onclick="switchView('schedule')">Schedule</button>
   <button class="view-tab" id="tab-dashboard" onclick="switchView('dashboard')">Dashboard</button>
   <button class="view-tab" id="tab-reports" onclick="switchView('reports')">Reports <span class="badge" id="reportsBadge" style="display:none">!</span></button>
-  <button class="view-tab admin-tab" id="tab-metrics" onclick="switchView('metrics')">📊 Metrics</button>
+  <button class="view-tab" id="tab-metrics" onclick="switchView('metrics')">📊 Metrics</button>
+  <button class="view-tab admin-tab" id="tab-financials" onclick="switchView('financials')">💰 Financials</button>
 </div>
 
 <div class="toolbar">
@@ -1474,8 +1489,8 @@
         </div>
       </div>
 
-      <!-- ADMIN-ONLY: Financial Summary -->
-      <div class="metrics-card admin-only" id="financialSummaryCard">
+      <!-- financials moved to Financials tab -->
+      <div style="display:none" id="financialSummaryCard">
         <div class="metrics-card-header">
           <h3>💰 Weekly Financials <span class="admin-badge">Admin Only</span></h3>
           <button class="btn-light" onclick="saveFinancials()">Save Financials</button>
@@ -1516,8 +1531,7 @@
         <div class="target-compare" id="targetCompare" style="margin-top:14px;"></div>
       </div>
 
-      <!-- ADMIN-ONLY: Payroll by Department -->
-      <div class="metrics-card admin-only" id="payrollByDeptCard">
+      <div style="display:none" id="payrollByDeptCard">
         <div class="metrics-card-header">
           <h3>👥 Payroll by Department <span class="admin-badge">Admin Only</span></h3>
           <button class="btn-light" onclick="openRatesModal()">Edit Hourly Rates</button>
@@ -1547,6 +1561,124 @@
           <button class="btn-primary" onclick="saveRates()">Save Rates</button>
         </div>
       </div>
+    </div>
+  </div>
+
+
+
+  <!-- ============================================================ -->
+  <!-- FINANCIALS TAB (admin only)                                  -->
+  <!-- ============================================================ -->
+  <div id="financialsContainer" style="display:none">
+    <div class="metrics-wrap">
+
+      <!-- Payroll by Department -->
+      <div class="metrics-card" id="fin_payrollByDeptCard">
+        <div class="metrics-card-header">
+          <h3>👥 Payroll by Department</h3>
+          <button class="btn-light" onclick="openRatesModal()">⚙ Edit Hourly Rates</button>
+        </div>
+        <table class="metrics-table" id="fin_payrollDeptTable">
+          <thead><tr><th>Department</th><th>Avg Rate</th><th>Hours This Week</th><th>Est. Payroll</th><th>% of Total</th></tr></thead>
+          <tbody id="fin_payrollDeptBody"></tbody>
+          <tfoot id="fin_payrollDeptFoot"></tfoot>
+        </table>
+      </div>
+
+
+      <!-- Invoice Upload Card -->
+      <div class="metrics-card" id="invoiceUploadCard">
+        <div class="metrics-card-header">
+          <h3>📄 Upload Reliant HR Invoice</h3>
+          <div style="font-size:12px;color:var(--ink-soft);">PDF → AI extracts → matches to your roster → updates financials</div>
+        </div>
+        <div style="padding:18px;">
+          <!-- Drop zone -->
+          <div class="import-drop-zone" id="invoiceDropZone"
+               onclick="document.getElementById('invoiceFileInput').click()"
+               ondragover="event.preventDefault();this.classList.add('drag-over')"
+               ondragleave="this.classList.remove('drag-over')"
+               ondrop="handleInvoiceDrop(event)">
+            <span class="big-icon">📄</span>
+            Drop your Reliant HR PDF here, or click to browse
+            <div style="font-size:11px;margin-top:6px;opacity:.7;">Supports multi-page PDFs · Invoice data is never sent anywhere except your own Anthropic API key</div>
+          </div>
+          <input type="file" id="invoiceFileInput" accept=".pdf" style="display:none" onchange="handleInvoiceFile(this.files[0])">
+
+          <!-- Processing status -->
+          <div id="invoiceStatus" style="display:none;margin-top:14px;padding:12px 16px;background:var(--primary-soft);border:1px solid #bfdbfe;border-radius:8px;font-size:13px;color:var(--primary);">
+            <span id="invoiceStatusMsg">Processing…</span>
+          </div>
+
+          <!-- Preview table -->
+          <div id="invoicePreviewWrap" style="display:none;margin-top:16px;">
+            <div class="import-summary" id="invoiceSummaryBadges"></div>
+            <div style="font-size:13px;font-weight:600;margin-bottom:8px;color:var(--ink);">
+              Employee Breakdown — <span id="invoicePreviewWeek"></span>
+            </div>
+            <div class="import-preview">
+              <table class="import-table" id="invoicePreviewTable">
+                <thead><tr>
+                  <th>Name (Invoice)</th><th>Category</th><th>Reg Hrs</th><th>OT Hrs</th>
+                  <th>Emp Rate</th><th>Billed Total</th><th>Matched Roster</th>
+                </tr></thead>
+                <tbody id="invoicePreviewBody"></tbody>
+              </table>
+            </div>
+            <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:12px;align-items:center;">
+              <span id="invoiceApplyNote" style="font-size:12px;color:var(--ink-soft);"></span>
+              <button class="btn-light" onclick="clearInvoicePreview()">Cancel</button>
+              <button class="btn-primary" id="invoiceApplyBtn" onclick="applyInvoice()">Apply to Financials</button>
+            </div>
+          </div>
+
+          <!-- Applied summary -->
+          <div id="invoiceAppliedWrap" style="display:none;margin-top:14px;"></div>
+        </div>
+      </div>
+
+      <!-- Weekly Financial Summary -->
+      <div class="metrics-card" id="fin_financialSummaryCard">
+        <div class="metrics-card-header">
+          <h3>💰 Weekly Financials</h3>
+          <button class="btn-light" onclick="saveFinancials()">Save</button>
+        </div>
+        <div class="metrics-entry-grid">
+          <div class="metrics-group">
+            <div class="metrics-group-title">Revenue</div>
+            <label class="metrics-field">Total Revenue ($)<input type="number" id="f_revenue_total" min="0" step="100" placeholder="0.00"></label>
+            <label class="metrics-field">Target Revenue ($)<input type="number" id="f_target_revenue" min="0" step="100" placeholder="0.00"></label>
+          </div>
+          <div class="metrics-group">
+            <div class="metrics-group-title">Payroll</div>
+            <label class="metrics-field">Total Payroll ($)<input type="number" id="f_payroll_total" min="0" step="100" placeholder="Auto-calculated"></label>
+            <label class="metrics-field">Target Payroll ($)<input type="number" id="f_target_payroll" min="0" step="100" placeholder="0.00"></label>
+          </div>
+          <div class="metrics-group">
+            <div class="metrics-group-title">Overhead & Margin</div>
+            <label class="metrics-field">Overhead ($)<input type="number" id="f_overhead" min="0" step="100" placeholder="0.00"></label>
+            <label class="metrics-field">Target Margin (%)<input type="number" id="f_target_margin" min="0" max="100" step="0.5" placeholder="35.0"></label>
+          </div>
+          <div class="metrics-group">
+            <div class="metrics-group-title">Revenue by Client</div>
+            <div id="revenueByClientWrap"></div>
+            <button class="btn-light" style="margin-top:6px;font-size:12px;" onclick="addRevenueClient()">+ Add Client</button>
+          </div>
+        </div>
+        <!-- Financial KPIs -->
+        <div class="metrics-kpi-row" id="financialKPIs" style="margin-top:14px;">
+          <div class="kpi-card green"><div class="kpi-val" id="fkpi_revenue">—</div><div class="kpi-label">Revenue</div></div>
+          <div class="kpi-card red"><div class="kpi-val" id="fkpi_payroll">—</div><div class="kpi-label">Payroll</div></div>
+          <div class="kpi-card red"><div class="kpi-val" id="fkpi_overhead">—</div><div class="kpi-label">Overhead</div></div>
+          <div class="kpi-card accent"><div class="kpi-val" id="fkpi_margin">—</div><div class="kpi-label">Gross Margin</div></div>
+          <div class="kpi-card accent"><div class="kpi-val" id="fkpi_margin_pct">—</div><div class="kpi-label">Margin %</div></div>
+          <div class="kpi-card"><div class="kpi-val" id="fkpi_cost_per_order">—</div><div class="kpi-label">Cost / Order</div></div>
+          <div class="kpi-card"><div class="kpi-val" id="fkpi_payroll_ratio">—</div><div class="kpi-label">Payroll / Revenue</div></div>
+        </div>
+        <!-- Target vs Actual -->
+        <div class="target-compare" id="targetCompare" style="margin-top:14px;"></div>
+      </div>
+
     </div>
   </div>
 
@@ -3600,10 +3732,15 @@ function switchView(view) {
   document.getElementById('reportsContainer').style.display   = view==='reports'   ? '' : 'none';
   const mCont = document.getElementById('metricsContainer');
   if (mCont) mCont.style.display = view==='metrics' ? '' : 'none';
+  const fCont = document.getElementById('financialsContainer');
+  if (fCont) fCont.style.display = view==='financials' ? '' : 'none';
+  const fTab = document.getElementById('tab-financials');
+  if (fTab) fTab.classList.toggle('active', view==='financials');
   state.currentView = view;
   if (view === 'dashboard') renderDashboard();
   if (view === 'reports') { initReportsTab(); renderSavedReports(); }
   if (view === 'metrics') { renderMetricsTab(); }
+  if (view === 'financials') { renderFinancialsTab(); }
   try { localStorage.setItem(STORAGE_KEY+'_view', view); } catch(e){}
 }
 
@@ -4248,6 +4385,332 @@ async function saveRates() {
   closeRatesModal();
   renderPayrollByDept();
   renderFinancialKPIs();
+}
+
+
+async function renderFinancialsTab() {
+  await loadMetricsForWeek(state.currentWeekStart);
+  renderFinPayrollByDept();
+  // Restore saved financials
+  const fin = financialsData[state.currentWeekStart] || {};
+  const setVal = (id, val) => { const el = document.getElementById(id); if(el && val !== undefined && val !== null && val !== 0) el.value = val; };
+  setVal('f_revenue_total',  fin.revenue_total);
+  setVal('f_target_revenue', fin.target_revenue);
+  setVal('f_payroll_total',  fin.payroll_total);
+  setVal('f_target_payroll', fin.target_payroll);
+  setVal('f_overhead',       fin.overhead);
+  setVal('f_target_margin',  fin.target_margin_pct);
+  const wrap = document.getElementById('revenueByClientWrap');
+  if (wrap) {
+    wrap.innerHTML = '';
+    Object.entries(fin.revenue_by_client || {}).forEach(([name, amt]) => addRevenueClient(name, amt));
+  }
+  renderFinancialKPIs();
+}
+
+function renderFinPayrollByDept() {
+  const body = document.getElementById('fin_payrollDeptBody');
+  const foot = document.getElementById('fin_payrollDeptFoot');
+  if (!body) return;
+  const { total: totalHours, byDept } = getWeekScheduledHours();
+  let totalPayroll = 0;
+  const rows = (state.roster || []).map(dept => {
+    const hrs  = byDept[dept.id] || 0;
+    const rate = deptRates[dept.id] || 18;
+    const pay  = hrs * rate;
+    totalPayroll += pay;
+    return { name: dept.name, id: dept.id, hrs, rate, pay };
+  });
+  body.innerHTML = rows.map(r => `<tr>
+    <td>${r.name}</td>
+    <td>$${(deptRates[r.id]||18).toFixed(2)}/hr</td>
+    <td>${r.hrs.toFixed(1)}</td>
+    <td>$${r.pay.toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0})}</td>
+    <td>${totalPayroll > 0 ? ((r.pay/totalPayroll)*100).toFixed(1)+'%' : '—'}</td>
+  </tr>`).join('');
+  foot.innerHTML = `<tr><td><strong>Total</strong></td><td>—</td>
+    <td><strong>${totalHours.toFixed(1)} hrs</strong></td>
+    <td><strong>$${totalPayroll.toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0})}</strong></td>
+    <td>100%</td></tr>`;
+  const pf = document.getElementById('f_payroll_total');
+  if (pf && !pf.value) pf.value = totalPayroll.toFixed(0);
+}
+
+
+// ==== Invoice Upload & AI Extraction ====
+
+let invoiceParsed = null;  // { invoiceNo, date, payPeriodStart, payPeriodEnd, total, employees: [...] }
+
+function handleInvoiceDrop(e) {
+  e.preventDefault();
+  document.getElementById('invoiceDropZone').classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (file && file.type === 'application/pdf') handleInvoiceFile(file);
+  else alert('Please drop a PDF file.');
+}
+
+async function handleInvoiceFile(file) {
+  if (!file) return;
+  setInvoiceStatus('Reading PDF…');
+  try {
+    const text = await extractPDFText(file);
+    setInvoiceStatus('Sending to AI for extraction…');
+    const apiKey = getAIApiKey();
+    if (!apiKey) {
+      setInvoiceStatus('');
+      alert('Please enter your Anthropic API key in the AI Assistant panel first (click 🤖 AI Assistant in the toolbar).');
+      return;
+    }
+    const extracted = await extractInvoiceWithAI(text, apiKey);
+    invoiceParsed = extracted;
+    setInvoiceStatus('');
+    renderInvoicePreview(extracted);
+  } catch(e) {
+    setInvoiceStatus('Error: ' + e.message);
+    console.error('Invoice processing failed', e);
+  }
+}
+
+function getAIApiKey() {
+  try {
+    const s = JSON.parse(localStorage.getItem('carrystar_ai_settings') || '{}');
+    return s.key || '';
+  } catch(e) { return ''; }
+}
+
+async function extractPDFText(file) {
+  // Use PDF.js (loaded from CDN) to extract all text
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try {
+        const pdfjsLib = window['pdfjs-dist/build/pdf'];
+        if (!pdfjsLib) {
+          // Fallback: read as binary and extract text naively
+          const arr = new Uint8Array(e.target.result);
+          let text = '';
+          for (let i = 0; i < arr.length; i++) {
+            if (arr[i] >= 32 && arr[i] < 127) text += String.fromCharCode(arr[i]);
+            else if (arr[i] === 10 || arr[i] === 13) text += '\n';
+          }
+          // Extract readable strings (4+ printable chars)
+          const readable = text.match(/[ -~]{4,}/g) || [];
+          resolve(readable.join('\n'));
+          return;
+        }
+        const pdf = await pdfjsLib.getDocument({ data: arr }).promise;
+        let fullText = '';
+        for (let i = 1; i <= pdf.numPages; i++) {
+          const page = await pdf.getPage(i);
+          const content = await page.getTextContent();
+          fullText += content.items.map(item => item.str).join(' ') + '\n';
+        }
+        resolve(fullText);
+      } catch(err) { reject(err); }
+    };
+    reader.onerror = reject;
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+async function extractInvoiceWithAI(pdfText, apiKey) {
+  const prompt = `You are parsing a Reliant HR staffing agency invoice for Carrystar Supply Chain.
+
+Extract ALL employee rows from the following invoice text. The invoice has sections: Rollover Employees, Temporary Employees, Salary, and possibly CarryStar Logistics.
+
+For each employee return a JSON object with:
+- name: full name as written
+- category: one of "Rollover", "Temporary", "Salary", "Logistics"
+- employee_rate: their hourly pay rate (number)
+- reg_hours: regular hours (number, 0 if blank)
+- ot_hours: overtime hours (number, 0 if blank)
+- dt_hours: double time hours (number, 0 if blank)
+- reg_service_rate: what Carrystar is billed per regular hour (number)
+- total: total billed for this employee (number)
+
+Also extract top-level fields:
+- invoice_no: invoice number string
+- invoice_date: date string
+- pay_period_start: start date string
+- pay_period_end: end date string  
+- grand_total: total invoice amount (number)
+
+Return ONLY valid JSON in this exact shape:
+{
+  "invoice_no": "...",
+  "invoice_date": "...",
+  "pay_period_start": "...",
+  "pay_period_end": "...",
+  "grand_total": 0,
+  "employees": [ { "name":"...", "category":"...", "employee_rate":0, "reg_hours":0, "ot_hours":0, "dt_hours":0, "reg_service_rate":0, "total":0 } ]
+}
+
+Invoice text:
+${pdfText.slice(0, 8000)}`;
+
+  const resp = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true',
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 4096,
+      messages: [{ role: 'user', content: prompt }],
+    }),
+  });
+  if (!resp.ok) throw new Error(`API error ${resp.status}`);
+  const data = await resp.json();
+  const raw = data.content[0].text;
+  // Extract JSON from response
+  const jsonMatch = raw.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) throw new Error('AI did not return valid JSON');
+  return JSON.parse(jsonMatch[0]);
+}
+
+function normalizeName(n) {
+  return (n || '').toLowerCase().replace(/[^a-z]/g, '');
+}
+
+function matchEmployeeToRoster(invoiceName) {
+  // Try to find a match in the roster by first name or full name
+  const normalized = normalizeName(invoiceName);
+  const firstName = normalized.slice(0, Math.min(5, normalized.length));
+  let best = null, bestScore = 0;
+  (state.roster || []).forEach(dept => {
+    dept.people.forEach(person => {
+      const pNorm = normalizeName(person.name);
+      // Exact match
+      if (pNorm === normalized) { best = { person, dept, score: 100 }; bestScore = 100; return; }
+      // First name match
+      const pFirst = pNorm.slice(0, Math.min(5, pNorm.length));
+      if (pFirst === firstName && pFirst.length >= 4) {
+        const score = 70;
+        if (score > bestScore) { best = { person, dept, score }; bestScore = score; }
+      }
+      // Partial match — invoice name contains roster name
+      if (pNorm.length >= 4 && normalized.includes(pNorm)) {
+        const score = 80;
+        if (score > bestScore) { best = { person, dept, score }; bestScore = score; }
+      }
+      if (pNorm.length >= 4 && pNorm.includes(normalized.slice(0,5))) {
+        const score = 65;
+        if (score > bestScore) { best = { person, dept, score }; bestScore = score; }
+      }
+    });
+  });
+  return best;
+}
+
+function renderInvoicePreview(data) {
+  document.getElementById('invoicePreviewWrap').style.display = '';
+  document.getElementById('invoicePreviewWeek').textContent =
+    `Pay period ${data.pay_period_start} – ${data.pay_period_end} · Invoice ${data.invoice_no}`;
+
+  let matched = 0, unmatched = 0;
+  const rows = (data.employees || []).map(emp => {
+    const m = matchEmployeeToRoster(emp.name);
+    const totalHrs = (emp.reg_hours||0) + (emp.ot_hours||0) + (emp.dt_hours||0);
+    let matchCell, rowClass;
+    if (m && m.score >= 70) {
+      matched++;
+      matchCell = `<span class="inv-match-chip ok">✓ ${m.person.name}</span><br><small style="color:var(--muted)">${m.dept.name}</small>`;
+      rowClass = 'inv-matched';
+    } else {
+      unmatched++;
+      matchCell = `<span class="inv-match-chip warn">? Unmatched</span>`;
+      rowClass = 'inv-unmatched';
+    }
+    return `<tr class="${rowClass}">
+      <td><strong>${emp.name}</strong></td>
+      <td><span style="font-size:11px;background:#e0e7ff;color:#3730a3;padding:2px 7px;border-radius:8px;">${emp.category}</span></td>
+      <td>${emp.reg_hours||0}</td>
+      <td>${emp.ot_hours||0}</td>
+      <td>$${(emp.employee_rate||0).toFixed(2)}</td>
+      <td><strong>$${(emp.total||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</strong></td>
+      <td>${matchCell}</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('invoicePreviewBody').innerHTML = rows;
+
+  // Summary badges
+  const grandTotal = data.grand_total || 0;
+  document.getElementById('invoiceSummaryBadges').innerHTML = `
+    <span class="import-badge info">Invoice: ${data.invoice_no}</span>
+    <span class="import-badge info">${(data.employees||[]).length} employees</span>
+    <span class="import-badge ok">${matched} matched</span>
+    ${unmatched ? `<span class="import-badge err">${unmatched} unmatched</span>` : ''}
+    <span class="import-badge info" style="background:#dcfce7;color:#166534;">Total: $${grandTotal.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>
+  `;
+  document.getElementById('invoiceApplyNote').textContent =
+    `Applying will auto-fill payroll total ($${grandTotal.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}) in Weekly Financials below.`;
+}
+
+async function applyInvoice() {
+  if (!invoiceParsed) return;
+  const data = invoiceParsed;
+
+  // Auto-fill payroll total from invoice grand total
+  const payrollEl = document.getElementById('f_payroll_total');
+  if (payrollEl) payrollEl.value = (data.grand_total || 0).toFixed(2);
+
+  // Build per-dept breakdown from matched employees
+  const deptTotals = {};
+  (data.employees || []).forEach(emp => {
+    const m = matchEmployeeToRoster(emp.name);
+    const deptId = m ? m.dept.id : 'unmatched';
+    deptTotals[deptId] = (deptTotals[deptId] || 0) + (emp.total || 0);
+  });
+
+  // Save to Supabase with invoice metadata
+  if (_sb && currentUser) {
+    try {
+      const fin = financialsData[state.currentWeekStart] || {};
+      await _sb.from('financials_weekly').upsert({
+        week_iso: state.currentWeekStart,
+        revenue_total:  parseFloat(document.getElementById('f_revenue_total')?.value) || fin.revenue_total || 0,
+        payroll_total:  data.grand_total,
+        payroll_by_dept: deptTotals,
+        revenue_by_client: fin.revenue_by_client || {},
+        overhead: fin.overhead || 0,
+        notes: `Invoice ${data.invoice_no} — ${data.pay_period_start} to ${data.pay_period_end}`,
+        updated_by: currentUser.email,
+      }, { onConflict: 'week_iso' });
+      financialsData[state.currentWeekStart] = { ...(financialsData[state.currentWeekStart]||{}), payroll_total: data.grand_total };
+    } catch(e) { console.error('invoice save failed', e); }
+  }
+
+  // Show applied confirmation
+  document.getElementById('invoicePreviewWrap').style.display = 'none';
+  document.getElementById('invoiceAppliedWrap').style.display = '';
+  document.getElementById('invoiceAppliedWrap').innerHTML = `
+    <div style="background:var(--good-soft);border:1px solid #bbf7d0;border-radius:8px;padding:14px 18px;font-size:13px;color:#166534;">
+      ✅ <strong>Invoice ${data.invoice_no} applied.</strong>
+      Payroll total of <strong>$${(data.grand_total||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</strong>
+      has been saved to your weekly financials.
+      <button class="btn-light" style="margin-left:12px;font-size:12px;" onclick="clearInvoicePreview()">Upload another</button>
+    </div>`;
+
+  renderFinancialKPIs();
+  renderTargetCompare();
+}
+
+function clearInvoicePreview() {
+  invoiceParsed = null;
+  document.getElementById('invoicePreviewWrap').style.display = 'none';
+  document.getElementById('invoiceAppliedWrap').style.display = 'none';
+  document.getElementById('invoiceStatus').style.display = 'none';
+  document.getElementById('invoiceFileInput').value = '';
+}
+
+function setInvoiceStatus(msg) {
+  const el = document.getElementById('invoiceStatus');
+  if (msg) { el.style.display = ''; document.getElementById('invoiceStatusMsg').textContent = msg; }
+  else { el.style.display = 'none'; }
 }
 
 // ==== Init ====
