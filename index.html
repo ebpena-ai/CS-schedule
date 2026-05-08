@@ -1206,6 +1206,7 @@
   }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 </head>
 <body>
 
@@ -4479,31 +4480,30 @@ function getAIApiKey() {
 }
 
 async function extractPDFText(file) {
-  // Use PDF.js (loaded from CDN) to extract all text
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = async (e) => {
       try {
-        const pdfjsLib = window['pdfjs-dist/build/pdf'];
-        if (!pdfjsLib) {
-          // Fallback: read as binary and extract text naively
-          const arr = new Uint8Array(e.target.result);
-          let text = '';
-          for (let i = 0; i < arr.length; i++) {
-            if (arr[i] >= 32 && arr[i] < 127) text += String.fromCharCode(arr[i]);
-            else if (arr[i] === 10 || arr[i] === 13) text += '\n';
-          }
-          // Extract readable strings (4+ printable chars)
-          const readable = text.match(/[ -~]{4,}/g) || [];
-          resolve(readable.join('\n'));
-          return;
-        }
-        const pdf = await pdfjsLib.getDocument({ data: arr }).promise;
+        const lib = window.pdfjsLib;
+        if (!lib) { reject(new Error('PDF.js not loaded')); return; }
+        // Set worker source
+        lib.GlobalWorkerOptions.workerSrc =
+          'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        const arr = new Uint8Array(e.target.result);
+        const pdf = await lib.getDocument({ data: arr }).promise;
         let fullText = '';
         for (let i = 1; i <= pdf.numPages; i++) {
           const page = await pdf.getPage(i);
           const content = await page.getTextContent();
-          fullText += content.items.map(item => item.str).join(' ') + '\n';
+          // Group items by approximate Y position to preserve row structure
+          const items = content.items;
+          let lastY = null;
+          items.forEach(item => {
+            if (lastY !== null && Math.abs(item.transform[5] - lastY) > 3) fullText += '\n';
+            fullText += item.str + ' ';
+            lastY = item.transform[5];
+          });
+          fullText += '\n--- page break ---\n';
         }
         resolve(fullText);
       } catch(err) { reject(err); }
@@ -4728,6 +4728,12 @@ function setInvoiceStatus(msg) {
   // Start real-time sync after first render
   setupRealtimeSync();
   try { const v=localStorage.getItem(STORAGE_KEY+'_view'); if(v==='dashboard')switchView('dashboard'); else if(v==='reports')switchView('reports'); } catch(e){}
+  refreshDueBanner();
+})();
+</script>
+</body>
+</html>
+atch(e){}
   refreshDueBanner();
 })();
 </script>
