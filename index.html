@@ -1121,6 +1121,21 @@
 
 
 
+
+  /* ============= Validation ============= */
+  .val-filter-btn { padding:5px 14px; border:1px solid var(--line-strong); border-radius:20px; font-size:12px; font-weight:600; cursor:pointer; background:#fff; color:var(--ink-soft); font-family:inherit; transition:all .12s; }
+  .val-filter-btn.active { background:var(--primary); color:#fff; border-color:var(--primary); }
+  .val-filter-btn:hover:not(.active) { border-color:var(--primary); color:var(--primary); }
+  #validationBody tr.val-ok   td { background:#f0fdf4; }
+  #validationBody tr.val-warn td { background:#fef9c3; }
+  #validationBody tr.val-err  td { background:var(--bad-soft); }
+  #validationBody tr.val-hidden { display:none; }
+  .val-status-chip { display:inline-block; padding:3px 9px; border-radius:10px; font-size:11px; font-weight:700; }
+  .val-status-chip.ok   { background:var(--good-soft); color:var(--good); }
+  .val-status-chip.warn { background:#fef9c3; color:#92400e; }
+  .val-status-chip.err  { background:var(--bad-soft); color:var(--bad); }
+  .val-action { font-size:11px; color:var(--ink-soft); max-width:160px; line-height:1.4; }
+
   /* ============= Invoice Upload ============= */
   #invoicePreviewBody tr.inv-matched td { background: #f0fdf4; }
   #invoicePreviewBody tr.inv-unmatched td { background: #fef9c3; }
@@ -1207,6 +1222,7 @@
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 </head>
 <body>
 
@@ -1636,6 +1652,84 @@
           <!-- Applied summary -->
           <div id="invoiceAppliedWrap" style="display:none;margin-top:14px;"></div>
         </div>
+      </div>
+
+
+      <!-- Invoice Validation Card -->
+      <div class="metrics-card" id="invoiceValidationCard" style="display:none">
+        <div class="metrics-card-header">
+          <h3>🔍 Schedule vs Invoice Validation</h3>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <span id="validationSummaryChip" style="font-size:12px;"></span>
+            <button class="btn-light" onclick="exportValidationCSV()">⬇ Export</button>
+          </div>
+        </div>
+        <div style="padding:14px 18px 6px;">
+          <p style="font-size:13px;color:var(--ink-soft);margin:0 0 12px;">
+            Cross-referencing invoice employees and hours against your scheduled week.
+            <strong style="color:var(--ink);">Green</strong> = match · 
+            <strong style="color:#92400e;">Yellow</strong> = discrepancy · 
+            <strong style="color:var(--bad);">Red</strong> = missing
+          </p>
+          <!-- Validation filter tabs -->
+          <div style="display:flex;gap:6px;margin-bottom:12px;" id="validationFilterRow">
+            <button class="val-filter-btn active" data-filter="all" onclick="setValidationFilter('all')">All</button>
+            <button class="val-filter-btn" data-filter="ok" onclick="setValidationFilter('ok')">✅ Match</button>
+            <button class="val-filter-btn" data-filter="warn" onclick="setValidationFilter('warn')">⚠️ Discrepancy</button>
+            <button class="val-filter-btn" data-filter="err" onclick="setValidationFilter('err')">🔴 Missing</button>
+          </div>
+        </div>
+        <div style="overflow-x:auto;">
+          <table class="metrics-table" id="validationTable">
+            <thead><tr>
+              <th>Employee</th><th>Category</th><th>Department</th>
+              <th>Invoice Hrs</th><th>Scheduled Hrs</th><th>Difference</th>
+              <th>Invoice Total</th><th>Status</th><th>Action</th>
+            </tr></thead>
+            <tbody id="validationBody"></tbody>
+          </table>
+        </div>
+        <!-- Unscheduled employees in schedule but not invoice -->
+        <div id="scheduleOnlyWrap" style="display:none;padding:14px 18px;border-top:1px solid var(--line);">
+          <div style="font-size:12px;font-weight:700;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">
+            ⚠️ In Schedule But Not on Invoice
+          </div>
+          <div id="scheduleOnlyList" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
+        </div>
+      </div>
+
+      <!-- Operating Costs Chart Card -->
+      <div class="metrics-card" id="costChartCard" style="display:none">
+        <div class="metrics-card-header">
+          <h3>📊 Weekly Operating Costs</h3>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <select id="chartTypeSelect" onchange="renderCostCharts()" style="font-size:12px;padding:4px 8px;border:1px solid var(--line-strong);border-radius:5px;">
+              <option value="breakdown">Cost Breakdown</option>
+              <option value="dept">By Department</option>
+              <option value="category">By Category (Invoice)</option>
+            </select>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;padding:18px;">
+          <!-- Donut: Cost breakdown -->
+          <div style="display:flex;flex-direction:column;align-items:center;">
+            <div style="font-size:12px;font-weight:700;color:var(--ink-soft);text-transform:uppercase;margin-bottom:8px;" id="chartLeftTitle">Cost Breakdown</div>
+            <div style="position:relative;width:260px;height:260px;">
+              <canvas id="costDonutChart"></canvas>
+              <div id="donutCenter" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;pointer-events:none;">
+                <div style="font-size:22px;font-weight:800;color:var(--ink);" id="donutCenterVal">—</div>
+                <div style="font-size:11px;color:var(--muted);">Total Cost</div>
+              </div>
+            </div>
+          </div>
+          <!-- Bar: By dept or category -->
+          <div>
+            <div style="font-size:12px;font-weight:700;color:var(--ink-soft);text-transform:uppercase;margin-bottom:8px;" id="chartRightTitle">By Department</div>
+            <canvas id="costBarChart" style="max-height:260px;"></canvas>
+          </div>
+        </div>
+        <!-- KPI strip below charts -->
+        <div class="metrics-kpi-row" id="costChartKPIs" style="padding:0 18px 18px;border-top:1px solid var(--line);padding-top:14px;margin-top:0;"></div>
       </div>
 
       <!-- Weekly Financial Summary -->
@@ -4121,6 +4215,9 @@ async function saveFinancials() {
   }
   renderFinancialKPIs();
   renderTargetCompare();
+  // Run validation and charts
+  runInvoiceValidation(data);
+  renderCostCharts();
 }
 
 function addRevenueClient(name, amt) {
@@ -4713,6 +4810,309 @@ function setInvoiceStatus(msg) {
   else { el.style.display = 'none'; }
 }
 
+
+// ==== Invoice Validation ====
+
+let validationRows = [];  // cached for filter/export
+
+function getScheduledHoursForPerson(personName, deptId, weekIso) {
+  if (!weekIso || !state.schedules || !state.schedules[weekIso]) return 0;
+  const deptSched = state.schedules[weekIso][deptId] || {};
+  const dept = (state.roster || []).find(d => d.id === deptId);
+  if (!dept) return 0;
+  const personIdx = dept.people.findIndex(p =>
+    normalizeName(p.name) === normalizeName(personName)
+  );
+  if (personIdx < 0) return 0;
+  const pSched = deptSched[personIdx] || {};
+  let total = 0;
+  for (let di = 0; di < 7; di++) {
+    const cell = pSched[di];
+    if (cell && cell.status === 'WORK') total += shiftHours(cell.start, cell.end);
+  }
+  return total;
+}
+
+function findInvoiceWeek(payPeriodStart) {
+  // Match invoice pay period start to nearest Monday in state.schedules
+  if (!payPeriodStart) return state.currentWeekStart;
+  try {
+    // Parse MM/DD/YYYY or YYYY-MM-DD
+    let d;
+    if (payPeriodStart.includes('/')) {
+      const [m, day, y] = payPeriodStart.split('/');
+      d = new Date(`${y}-${m.padStart(2,'0')}-${day.padStart(2,'0')}T00:00:00`);
+    } else {
+      d = new Date(payPeriodStart + 'T00:00:00');
+    }
+    return isoDate(getMondayOf(d));
+  } catch(e) { return state.currentWeekStart; }
+}
+
+function runInvoiceValidation(invoiceData) {
+  const card = document.getElementById('invoiceValidationCard');
+  if (!card) return;
+  card.style.display = '';
+
+  const weekIso = findInvoiceWeek(invoiceData.pay_period_start);
+  const employees = invoiceData.employees || [];
+  validationRows = [];
+
+  // Build set of all roster employees for "in schedule but not invoice" check
+  const rosterSet = new Set();
+  (state.roster || []).forEach(dept => {
+    dept.people.forEach(p => { rosterSet.add(normalizeName(p.name)); });
+  });
+  const invoiceSet = new Set(employees.map(e => normalizeName(e.name)));
+
+  // Build rows
+  employees.forEach(emp => {
+    const match = matchEmployeeToRoster(emp.name);
+    const invoiceHrs = (emp.reg_hours || 0) + (emp.ot_hours || 0) + (emp.dt_hours || 0);
+    let schedHrs = 0, deptName = '—', status, rowClass, action;
+
+    if (match && match.score >= 70) {
+      schedHrs = getScheduledHoursForPerson(match.person.name, match.dept.id, weekIso);
+      deptName = match.dept.name;
+    }
+
+    const diff = invoiceHrs - schedHrs;
+    const absDiff = Math.abs(diff);
+
+    if (!match || match.score < 70) {
+      status = 'err'; rowClass = 'val-err';
+      action = 'Not found in schedule roster — add person or check name spelling';
+    } else if (schedHrs === 0 && invoiceHrs > 0) {
+      status = 'warn'; rowClass = 'val-warn';
+      action = `No scheduled hours found for week of ${weekIso} — verify schedule entry`;
+    } else if (absDiff <= 0.5) {
+      status = 'ok'; rowClass = 'val-ok';
+      action = '—';
+    } else if (absDiff <= 3) {
+      status = 'warn'; rowClass = 'val-warn';
+      action = diff > 0
+        ? `Invoice ${absDiff.toFixed(1)} hrs more than scheduled — verify OT or missed entry`
+        : `Schedule ${absDiff.toFixed(1)} hrs more than invoice — check if hours were worked`;
+    } else {
+      status = 'warn'; rowClass = 'val-warn';
+      action = diff > 0
+        ? `⚠️ Invoice ${absDiff.toFixed(1)} hrs over schedule — review with agency`
+        : `⚠️ Schedule ${absDiff.toFixed(1)} hrs over invoice — possible missed shift entry`;
+    }
+
+    validationRows.push({ emp, match, deptName, invoiceHrs, schedHrs, diff, status, rowClass, action });
+  });
+
+  renderValidationTable('all');
+
+  // Schedule-only employees
+  const schedOnly = [];
+  (state.roster || []).forEach(dept => {
+    dept.people.forEach(p => {
+      if (!invoiceSet.has(normalizeName(p.name))) {
+        // Check if they have hours this week
+        const hrs = getScheduledHoursForPerson(p.name, dept.id, weekIso);
+        if (hrs > 0) schedOnly.push({ name: p.name, dept: dept.name, hrs });
+      }
+    });
+  });
+  const soWrap = document.getElementById('scheduleOnlyWrap');
+  const soList = document.getElementById('scheduleOnlyList');
+  if (schedOnly.length > 0 && soWrap && soList) {
+    soWrap.style.display = '';
+    soList.innerHTML = schedOnly.map(p =>
+      `<span style="background:#fef9c3;border:1px solid #fde68a;border-radius:8px;padding:4px 10px;font-size:12px;color:#92400e;">
+        <strong>${p.name}</strong> · ${p.dept} · ${p.hrs.toFixed(1)} hrs scheduled
+      </span>`
+    ).join('');
+  } else if (soWrap) { soWrap.style.display = 'none'; }
+
+  // Summary chip
+  const ok   = validationRows.filter(r => r.status === 'ok').length;
+  const warn = validationRows.filter(r => r.status === 'warn').length;
+  const err  = validationRows.filter(r => r.status === 'err').length;
+  document.getElementById('validationSummaryChip').innerHTML =
+    `<span style="color:var(--good);font-weight:700;">${ok} matched</span>` +
+    (warn ? ` · <span style="color:#92400e;font-weight:700;">${warn} discrepancies</span>` : '') +
+    (err  ? ` · <span style="color:var(--bad);font-weight:700;">${err} missing</span>` : '');
+}
+
+function renderValidationTable(filter) {
+  const tbody = document.getElementById('validationBody');
+  if (!tbody) return;
+  tbody.innerHTML = validationRows.map(r => {
+    const hidden = (filter !== 'all' && r.status !== filter) ? ' val-hidden' : '';
+    const diffStr = r.diff === 0 ? '—'
+      : (r.diff > 0 ? `<span style="color:var(--bad)">+${r.diff.toFixed(1)}</span>`
+                    : `<span style="color:#92400e">${r.diff.toFixed(1)}</span>`);
+    return `<tr class="${r.rowClass}${hidden}">
+      <td><strong>${r.emp.name}</strong></td>
+      <td><span style="font-size:11px;background:#e0e7ff;color:#3730a3;padding:2px 7px;border-radius:8px;">${r.emp.category}</span></td>
+      <td>${r.deptName}</td>
+      <td>${r.invoiceHrs.toFixed(1)}</td>
+      <td>${r.schedHrs > 0 ? r.schedHrs.toFixed(1) : '<span style="color:var(--muted)">—</span>'}</td>
+      <td>${diffStr}</td>
+      <td>$${(r.emp.total||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+      <td><span class="val-status-chip ${r.status}">${r.status==='ok'?'✅ Match':r.status==='warn'?'⚠️ Review':'🔴 Missing'}</span></td>
+      <td class="val-action">${r.action}</td>
+    </tr>`;
+  }).join('');
+
+  // Update filter button states
+  document.querySelectorAll('.val-filter-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.filter === filter);
+  });
+}
+
+function setValidationFilter(filter) { renderValidationTable(filter); }
+
+function exportValidationCSV() {
+  const headers = ['Name','Category','Department','Invoice Hrs','Scheduled Hrs','Difference','Billed Total','Status','Action'];
+  const rows = validationRows.map(r => [
+    r.emp.name, r.emp.category, r.deptName,
+    r.invoiceHrs.toFixed(1), r.schedHrs.toFixed(1),
+    r.diff.toFixed(1), (r.emp.total||0).toFixed(2),
+    r.status === 'ok' ? 'Match' : r.status === 'warn' ? 'Review' : 'Missing',
+    r.action.replace(/,/g,' ')
+  ]);
+  const csv = [headers, ...rows].map(r => r.join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = 'data:text/csv,' + encodeURIComponent(csv);
+  a.download = `invoice-validation-${state.currentWeekStart}.csv`;
+  a.click();
+}
+
+// ==== Cost Charts ====
+
+let donutChartInst = null;
+let barChartInst   = null;
+
+function renderCostCharts() {
+  const card = document.getElementById('costChartCard');
+  if (!invoiceParsed) return;
+  card.style.display = '';
+  const chartType = document.getElementById('chartTypeSelect')?.value || 'breakdown';
+  renderDonutChart();
+  if (chartType === 'dept') renderBarByDept();
+  else if (chartType === 'category') renderBarByCategory();
+  else renderBarBreakdown();
+  renderCostChartKPIs();
+}
+
+function renderDonutChart() {
+  const revenue  = parseFloat(document.getElementById('f_revenue_total')?.value)  || 0;
+  const payroll  = invoiceParsed ? (invoiceParsed.grand_total || 0) : 0;
+  const overhead = parseFloat(document.getElementById('f_overhead')?.value) || 0;
+  const margin   = Math.max(0, revenue - payroll - overhead);
+
+  document.getElementById('donutCenterVal').textContent =
+    '$' + Math.round(payroll + overhead).toLocaleString();
+
+  const ctx = document.getElementById('costDonutChart').getContext('2d');
+  if (donutChartInst) donutChartInst.destroy();
+  donutChartInst = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: ['Agency Payroll', 'Overhead', 'Gross Margin'],
+      datasets: [{ data: [payroll, overhead, margin],
+        backgroundColor: ['#ef4444','#f97316','#22c55e'],
+        borderWidth: 2, borderColor: '#fff', hoverOffset: 8 }]
+    },
+    options: {
+      cutout: '65%', plugins: { legend: { position: 'bottom',
+        labels: { font: { size: 12 }, padding: 12 } } },
+      animation: { duration: 600 }
+    }
+  });
+}
+
+function renderBarByCategory() {
+  if (!invoiceParsed) return;
+  document.getElementById('chartRightTitle').textContent = 'Billed Cost by Category';
+  const cats = {};
+  (invoiceParsed.employees || []).forEach(e => {
+    cats[e.category] = (cats[e.category] || 0) + (e.total || 0);
+  });
+  const labels = Object.keys(cats);
+  const data   = Object.values(cats);
+  const colors = ['#6366f1','#8b5cf6','#ec4899','#f97316'];
+  const ctx = document.getElementById('costBarChart').getContext('2d');
+  if (barChartInst) barChartInst.destroy();
+  barChartInst = new Chart(ctx, {
+    type: 'bar',
+    data: { labels, datasets: [{ label: 'Billed ($)', data,
+      backgroundColor: colors.slice(0, labels.length), borderRadius: 6 }] },
+    options: { plugins: { legend: { display: false } },
+      scales: { y: { ticks: { callback: v => '$'+Math.round(v).toLocaleString() } } },
+      animation: { duration: 600 } }
+  });
+}
+
+function renderBarByDept() {
+  document.getElementById('chartRightTitle').textContent = 'Billed Cost by Department';
+  const deptTotals = {};
+  (invoiceParsed?.employees || []).forEach(emp => {
+    const m = matchEmployeeToRoster(emp.name);
+    const key = m ? m.dept.name : 'Unmatched';
+    deptTotals[key] = (deptTotals[key] || 0) + (emp.total || 0);
+  });
+  const labels = Object.keys(deptTotals);
+  const data   = Object.values(deptTotals);
+  const ctx = document.getElementById('costBarChart').getContext('2d');
+  if (barChartInst) barChartInst.destroy();
+  barChartInst = new Chart(ctx, {
+    type: 'bar',
+    data: { labels, datasets: [{ label: 'Billed ($)', data,
+      backgroundColor: '#6366f1', borderRadius: 6 }] },
+    options: { indexAxis: 'y', plugins: { legend: { display: false } },
+      scales: { x: { ticks: { callback: v => '$'+Math.round(v).toLocaleString() } } },
+      animation: { duration: 600 } }
+  });
+}
+
+function renderBarBreakdown() {
+  document.getElementById('chartRightTitle').textContent = 'Cost vs Revenue';
+  const revenue  = parseFloat(document.getElementById('f_revenue_total')?.value)  || 0;
+  const payroll  = invoiceParsed ? (invoiceParsed.grand_total || 0) : 0;
+  const overhead = parseFloat(document.getElementById('f_overhead')?.value) || 0;
+  const ctx = document.getElementById('costBarChart').getContext('2d');
+  if (barChartInst) barChartInst.destroy();
+  barChartInst = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: ['Revenue', 'Payroll', 'Overhead', 'Gross Margin'],
+      datasets: [{ label: 'Amount ($)',
+        data: [revenue, payroll, overhead, Math.max(0, revenue - payroll - overhead)],
+        backgroundColor: ['#22c55e','#ef4444','#f97316','#6366f1'], borderRadius: 6 }]
+    },
+    options: { plugins: { legend: { display: false } },
+      scales: { y: { ticks: { callback: v => '$'+Math.round(v).toLocaleString() } } },
+      animation: { duration: 600 } }
+  });
+}
+
+function renderCostChartKPIs() {
+  const wrap = document.getElementById('costChartKPIs');
+  if (!wrap || !invoiceParsed) return;
+  const payroll  = invoiceParsed.grand_total || 0;
+  const revenue  = parseFloat(document.getElementById('f_revenue_total')?.value)  || 0;
+  const overhead = parseFloat(document.getElementById('f_overhead')?.value) || 0;
+  const margin   = revenue - payroll - overhead;
+  const employees= invoiceParsed.employees || [];
+  const totalHrs = employees.reduce((s,e) => s+(e.reg_hours||0)+(e.ot_hours||0), 0);
+  const avgRate  = totalHrs > 0 ? payroll / totalHrs : 0;
+  const fmt = n => '$' + Math.round(n).toLocaleString();
+  wrap.innerHTML = `
+    <div class="kpi-card red"   ><div class="kpi-val">${fmt(payroll)}</div><div class="kpi-label">Agency Invoice</div></div>
+    <div class="kpi-card"       ><div class="kpi-val">${fmt(overhead)}</div><div class="kpi-label">Overhead</div></div>
+    <div class="kpi-card ${margin>=0?'green':'red'}"  ><div class="kpi-val">${fmt(margin)}</div><div class="kpi-label">Gross Margin</div></div>
+    <div class="kpi-card accent"><div class="kpi-val">${revenue>0?(margin/revenue*100).toFixed(1)+'%':'—'}</div><div class="kpi-label">Margin %</div></div>
+    <div class="kpi-card"       ><div class="kpi-val">${totalHrs.toFixed(0)} hrs</div><div class="kpi-label">Invoice Hours</div></div>
+    <div class="kpi-card accent"><div class="kpi-val">$${avgRate.toFixed(2)}</div><div class="kpi-label">Avg Billed/Hr</div></div>
+    <div class="kpi-card"       ><div class="kpi-val">${employees.length}</div><div class="kpi-label">Employees</div></div>
+  `;
+}
+
 // ==== Init ====
 
 (async function init() {
@@ -4728,12 +5128,6 @@ function setInvoiceStatus(msg) {
   // Start real-time sync after first render
   setupRealtimeSync();
   try { const v=localStorage.getItem(STORAGE_KEY+'_view'); if(v==='dashboard')switchView('dashboard'); else if(v==='reports')switchView('reports'); } catch(e){}
-  refreshDueBanner();
-})();
-</script>
-</body>
-</html>
-atch(e){}
   refreshDueBanner();
 })();
 </script>
