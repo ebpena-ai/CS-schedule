@@ -1756,6 +1756,7 @@
           </div>
           <!-- Preview (before apply) -->
           <div id="invoicePreviewWrap" style="display:none;margin-top:16px;">
+            <div id="invoiceDupWarn" style="display:none;"></div>
             <div class="import-summary" id="invoiceSummaryBadges"></div>
             <div style="font-size:13px;font-weight:600;margin-bottom:8px;color:var(--ink);">
               Employee Breakdown — <span id="invoicePreviewWeek"></span>
@@ -4254,6 +4255,16 @@ async function loadMetricsForWeek(weekIso) {
     const { data: rates } = await _sb.from('dept_hourly_rates').select('*');
     if (rates) rates.forEach(r => { deptRates[r.dept_id] = parseFloat(r.avg_rate); });
   } catch(e) {}
+  // Load full invoice data cached in app_config
+  try {
+    const { data: invConf } = await _sb.from('app_config')
+      .select('value').eq('key', 'invoice_emp_' + weekIso).maybeSingle();
+    if (invConf && invConf.value) {
+      invoiceCacheByWeek[weekIso] = invConf.value;
+      // Also sync to localStorage for instant future access
+      try { localStorage.setItem('cs_inv_' + weekIso, JSON.stringify(invConf.value)); } catch(e) {}
+    }
+  } catch(e) {}
 }
 
 async function saveMetricsDay() {
@@ -4612,43 +4623,11 @@ async function renderFinancialsTab() {
   // Init financials week to current schedule week on first open
   if (!_finCurrentWeek) _finCurrentWeek = state.currentWeekStart;
   _updateFinWeekLabel();
-  // When week changes, try to restore cached invoice — otherwise reset UI
-  if (_invoiceEditorWeek !== _finCurrentWeek) {
-    _invoiceEditorWeek = _finCurrentWeek;
-    // Try to restore invoice from localStorage cache
-    let cached = null;
-    try { const raw = localStorage.getItem('cs_inv_' + _finCurrentWeek); if (raw) cached = JSON.parse(raw); } catch(e) {}
-    if (cached) {
-      // Restore the invoice state for this week
-      invoiceParsed = cached;
-      window._invoiceEditorData = null; // will be rebuilt by renderEditableInvoiceTable
-      const appWrap = document.getElementById('invoiceAppliedWrap');
-      if (appWrap) {
-        appWrap.style.display = '';
-        appWrap.innerHTML = `<div style="background:var(--good-soft);border:1px solid #bbf7d0;border-radius:8px;padding:12px 16px;font-size:13px;color:#166534;">
-          ✅ <strong>Invoice ${cached.invoice_no}</strong> on file for this week
-          (${cached.pay_period_start} – ${cached.pay_period_end}) ·
-          $${(cached.grand_total||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})} payroll.
-          <button class="btn-light" style="margin-left:12px;font-size:12px;" onclick="clearInvoiceData()">Clear &amp; Upload New</button>
-        </div>`;
-      }
-    } else {
-      // No invoice for this week — clear everything
-      invoiceParsed = null;
-      window._invoiceEditorData = null;
-      const edCard = document.getElementById('fin_invoiceEditorCard');
-      if (edCard) edCard.style.display = 'none';
-      const valCard = document.getElementById('invoiceValidationCard');
-      if (valCard) valCard.style.display = 'none';
-      const cc = document.getElementById('chartContent');
-      const ce = document.getElementById('chartEmptyState');
-      if (cc) cc.style.display = 'none';
-      if (ce) ce.style.display = '';
-      const appWrap = document.getElementById('invoiceAppliedWrap');
-      if (appWrap) { appWrap.style.display = 'none'; appWrap.innerHTML = ''; }
-    }
-  }
+  _invoiceEditorWeek = _finCurrentWeek;
+  // Load Supabase data for this week (includes invoice cache from app_config)
   await loadMetricsForWeek(_finCurrentWeek);
+  // Unconditionally restore invoice state — runs every time tab opens
+  _restoreInvoiceForWeek(_finCurrentWeek);
   renderFinPayrollByDept();
   const fin = financialsData[_finCurrentWeek] || {};
   const setVal = (id, val) => { const el = document.getElementById(id); if(el && val !== undefined && val !== null && val !== 0) el.value = val; };
@@ -4664,13 +4643,49 @@ async function renderFinancialsTab() {
     Object.entries(fin.revenue_by_client || {}).forEach(([name, amt]) => addRevenueClient(name, amt));
   }
   renderFinancialKPIs();
-  // If a cached invoice was restored for this week, rebuild editor + charts
-  if (invoiceParsed) {
-    renderEditableInvoiceTable(invoiceParsed);
-    runInvoiceValidation(invoiceParsed);
-    renderCostCharts();
-  }
   if (_finCurrentSubPage === 'cumulative') renderFinCumulativePage();
+}
+
+// Restore invoice UI for a given week — runs every time the financials tab opens
+function _restoreInvoiceForWeek(week) {
+  // Priority: in-memory → localStorage → Supabase app_config cache
+  let inv = invoiceParsed && _invoiceEditorWeek === week ? invoiceParsed : null;
+  if (!inv) {
+    try { const r = localStorage.getItem('cs_inv_' + week); if (r) inv = JSON.parse(r); } catch(e) {}
+  }
+  if (!inv) inv = invoiceCacheByWeek[week] || null;
+
+  const appWrap = document.getElementById('invoiceAppliedWrap');
+  const edCard  = document.getElementById('fin_invoiceEditorCard');
+  const valCard = document.getElementById('invoiceValidationCard');
+  const cc      = document.getElementById('chartContent');
+  const ce      = document.getElementById('chartEmptyState');
+
+  if (inv) {
+    invoiceParsed = inv;
+    window._invoiceEditorData = null;
+    if (appWrap) {
+      appWrap.style.display = '';
+      appWrap.innerHTML = `<div style="background:var(--good-soft);border:1px solid #bbf7d0;border-radius:8px;padding:12px 16px;font-size:13px;color:#166534;display:flex;align-items:center;flex-wrap:wrap;gap:8px;">
+        ✅ <strong>Invoice ${inv.invoice_no}</strong> on file &nbsp;·&nbsp;
+        ${inv.pay_period_start} – ${inv.pay_period_end} &nbsp;·&nbsp;
+        <strong>$${(inv.grand_total||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</strong> payroll
+        <button class="btn-light" style="margin-left:auto;font-size:12px;" onclick="clearInvoiceData()">🗑 Clear &amp; Upload New</button>
+      </div>`;
+    }
+    // Rebuild editor + validation + charts
+    renderEditableInvoiceTable(inv);
+    runInvoiceValidation(inv);
+    renderCostCharts();
+  } else {
+    invoiceParsed = null;
+    window._invoiceEditorData = null;
+    if (edCard)  edCard.style.display  = 'none';
+    if (valCard) valCard.style.display = 'none';
+    if (cc) cc.style.display = 'none';
+    if (ce) ce.style.display = '';
+    if (appWrap) { appWrap.style.display = 'none'; appWrap.innerHTML = ''; }
+  }
 }
 
 function switchFinSubPage(page) {
@@ -4907,6 +4922,7 @@ function renderFinPayrollByDept() {
 // ==== Invoice Upload & AI Extraction ====
 
 let invoiceParsed = null;  // { invoiceNo, date, payPeriodStart, payPeriodEnd, total, employees: [...] }
+let invoiceCacheByWeek = {};  // invoice data loaded from Supabase app_config, keyed by week ISO
 
 function handleInvoiceDrop(e) {
   e.preventDefault();
@@ -5112,14 +5128,51 @@ function renderInvoicePreview(data) {
     ${unmatched ? `<span class="import-badge err">${unmatched} unmatched</span>` : ''}
     <span class="import-badge info" style="background:#dcfce7;color:#166534;">Total: $${grandTotal.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>
   `;
+  // Duplicate / overwrite detection
+  const previewWeek = findInvoiceWeek(data.pay_period_start);
+  let existingInv = null;
+  try { const r = localStorage.getItem('cs_inv_' + previewWeek); if (r) existingInv = JSON.parse(r); } catch(e) {}
+  if (!existingInv) existingInv = invoiceCacheByWeek[previewWeek] || null;
+  const existingFin = financialsData[previewWeek] || {};
+
+  const dupWrap = document.getElementById('invoiceDupWarn');
+  if (dupWrap) {
+    if (existingInv && existingInv.invoice_no === data.invoice_no) {
+      dupWrap.style.display = '';
+      dupWrap.innerHTML = `<div style="background:#fef9c3;border:1px solid #fde68a;border-radius:7px;padding:10px 14px;font-size:12px;color:#92400e;margin-bottom:10px;">
+        ⚠️ <strong>Duplicate detected:</strong> Invoice <strong>${data.invoice_no}</strong> was already applied to the week of ${previewWeek}.
+        Applying again will overwrite the existing data.
+      </div>`;
+    } else if (existingInv) {
+      dupWrap.style.display = '';
+      dupWrap.innerHTML = `<div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:7px;padding:10px 14px;font-size:12px;color:#92400e;margin-bottom:10px;">
+        ⚠️ <strong>Invoice already on file</strong> for week of ${previewWeek} (Invoice ${existingInv.invoice_no} · $${(existingInv.grand_total||0).toLocaleString('en-US',{maximumFractionDigits:0})}).
+        Applying will <strong>replace</strong> the existing invoice.
+      </div>`;
+    } else if (existingFin.payroll_total > 0 && !existingInv) {
+      dupWrap.style.display = '';
+      dupWrap.innerHTML = `<div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:7px;padding:10px 14px;font-size:12px;color:#1e40af;margin-bottom:10px;">
+        ℹ️ Payroll of <strong>$${existingFin.payroll_total.toLocaleString('en-US',{maximumFractionDigits:0})}</strong> already recorded for week of ${previewWeek}.
+        Applying will update it with this invoice amount.
+      </div>`;
+    } else {
+      dupWrap.style.display = 'none';
+    }
+  }
+
   document.getElementById('invoiceApplyNote').textContent =
-    `Applying will auto-fill payroll total ($${grandTotal.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}) in Weekly Financials below.`;
+    `Applying will set payroll to $${grandTotal.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})} for the week of ${previewWeek}.`;
 }
 
 async function applyInvoice() {
   if (!invoiceParsed) return;
   const data = invoiceParsed;
-  const week = _finCurrentWeek || state.currentWeekStart;
+  // Snap the financials week to match the invoice pay period
+  const invoiceWeek = findInvoiceWeek(data.pay_period_start);
+  _finCurrentWeek = invoiceWeek;
+  _invoiceEditorWeek = invoiceWeek;
+  _updateFinWeekLabel();
+  const week = invoiceWeek;
 
   // Auto-fill payroll total from invoice grand total
   const payrollEl = document.getElementById('f_payroll_total');
@@ -5133,7 +5186,7 @@ async function applyInvoice() {
     deptTotals[deptId] = (deptTotals[deptId] || 0) + (emp.total || 0);
   });
 
-  // Save to Supabase with invoice metadata (using fin week, not schedule week)
+  // Save summary to financials_weekly
   if (_sb && currentUser) {
     try {
       const fin = financialsData[week] || {};
@@ -5151,7 +5204,17 @@ async function applyInvoice() {
     } catch(e) { console.error('invoice save failed', e); }
   }
 
-  // Cache full invoice payload in localStorage so it survives tab/week navigation
+  // Save FULL employee payload to app_config (survives page refresh + works across browsers)
+  invoiceCacheByWeek[week] = data;
+  if (_sb && currentUser) {
+    try {
+      await _sb.from('app_config').upsert(
+        { key: 'invoice_emp_' + week, value: data },
+        { onConflict: 'key' }
+      );
+    } catch(e) { console.warn('invoice config save failed', e); }
+  }
+  // Also write localStorage as fast-access cache
   try { localStorage.setItem('cs_inv_' + week, JSON.stringify(data)); } catch(e) {}
 
   // Show applied confirmation
