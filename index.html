@@ -1187,6 +1187,19 @@
   .inv-hist-empty { padding:28px; text-align:center; color:var(--muted); font-size:13px; }
   .hist-collapse-btn { background:none; border:none; font-size:12px; color:var(--ink-soft); cursor:pointer; padding:2px 8px; border-radius:4px; }
   .hist-collapse-btn:hover { background:var(--off-soft); color:var(--ink); }
+  /* Validation inline edit (alias + hours override) */
+  .val-link-select { font-size:12px; padding:5px 8px; border:1.5px solid var(--line-strong); border-radius:6px; max-width:200px; cursor:pointer; background:#fff; color:var(--ink); font-family:inherit; }
+  .val-link-select:focus { outline:none; border-color:var(--primary); box-shadow:0 0 0 3px rgba(99,102,241,.12); }
+  .val-alias-chip { display:inline-flex; align-items:center; gap:4px; background:#e0e7ff; color:#3730a3; border-radius:10px; padding:2px 8px; font-size:11px; font-weight:600; }
+  .val-alias-remove { background:none; border:none; cursor:pointer; color:#818cf8; font-size:13px; padding:0 2px; line-height:1; }
+  .val-alias-remove:hover { color:#ef4444; }
+  .val-hrs-wrap { display:flex; flex-direction:column; gap:4px; }
+  .val-hrs-row { display:flex; gap:4px; align-items:center; }
+  .val-hrs-input { width:62px; padding:4px 6px; font-size:12px; border:1.5px solid var(--line-strong); border-radius:5px; text-align:center; font-family:inherit; }
+  .val-hrs-input:focus { outline:none; border-color:var(--primary); }
+  .val-hrs-input.overridden { border-color:#6366f1; background:#eef2ff; }
+  .val-hrs-save { font-size:11px; padding:3px 9px; }
+  .val-override-badge { font-size:10px; color:#6366f1; font-weight:600; }
   /* Financials independent week nav */
   .fin-week-nav { display:flex; align-items:center; gap:10px; padding:10px 24px 0; }
   .fin-week-nav-btn { background:rgba(255,255,255,.9); border:1.5px solid var(--line-strong); color:var(--ink); width:32px; height:32px; border-radius:6px; font-size:16px; cursor:pointer; display:flex; align-items:center; justify-content:center; line-height:1; padding:0; transition:all .15s; }
@@ -1745,7 +1758,7 @@
             <thead><tr>
               <th>Employee</th><th>Category</th><th>Department</th>
               <th>Invoice Hrs</th><th>Scheduled Hrs</th><th>Difference</th>
-              <th>Invoice Total</th><th>Status</th><th>Action</th>
+              <th>Invoice Total</th><th>Status</th><th>Resolve / Action</th>
             </tr></thead>
             <tbody id="validationBody"></tbody>
           </table>
@@ -4654,6 +4667,8 @@ async function renderFinancialsTab() {
   _restoreInvoiceForWeek(_finCurrentWeek);
   // Load (or refresh) the history panel
   loadInvoiceHistory();
+  // Load name aliases + schedule hour overrides for this week
+  await loadFinAliasesAndOverrides();
   renderFinPayrollByDept();
   const fin = financialsData[_finCurrentWeek] || {};
   const setVal = (id, val) => { const el = document.getElementById(id); if(el && val !== undefined && val !== null && val !== 0) el.value = val; };
@@ -4730,6 +4745,8 @@ function switchFinSubPage(page) {
 // ==== Invoice History ====
 
 let _invHistCollapsed = false;
+let _invoiceAliases    = {};   // { normalized_invoice_name: roster_person_name }
+let _schedHrsOverrides = {};   // { normalized_person_name: override_hours } for _finCurrentWeek
 
 function toggleInvoiceHistory() {
   _invHistCollapsed = !_invHistCollapsed;
@@ -5248,6 +5265,23 @@ function normalizeName(n) {
 function matchEmployeeToRoster(invoiceName) {
   // Try to find a match in the roster by first name or full name
   const normalized = normalizeName(invoiceName);
+
+  // ── Check saved name aliases first ──────────────────────────
+  const aliasedName = _invoiceAliases[normalized];
+  if (aliasedName) {
+    const aliasNorm = normalizeName(aliasedName);
+    let aliasMatch = null;
+    (state.roster || []).forEach(dept => {
+      dept.people.forEach(person => {
+        if (!aliasMatch && normalizeName(person.name) === aliasNorm) {
+          aliasMatch = { person, dept, score: 100 };
+        }
+      });
+    });
+    if (aliasMatch) return aliasMatch;
+  }
+  // ────────────────────────────────────────────────────────────
+
   const firstName = normalized.slice(0, Math.min(5, normalized.length));
   let best = null, bestScore = 0;
   (state.roster || []).forEach(dept => {
@@ -5461,11 +5495,93 @@ function setInvoiceStatus(msg) {
 }
 
 
+// ==== Invoice Aliases & Schedule Hour Overrides ====
+
+async function loadFinAliasesAndOverrides() {
+  if (!_sb || !currentUser) return;
+  try {
+    // Name aliases: invoice name → roster person name
+    const { data: aRow } = await _sb.from('app_config')
+      .select('value').eq('key', 'invoice_name_aliases').maybeSingle();
+    _invoiceAliases = (aRow && aRow.value) ? aRow.value : {};
+
+    // Hours overrides: per-week, per-person corrections
+    const { data: oRow } = await _sb.from('app_config')
+      .select('value').eq('key', 'sched_hrs_override_' + _finCurrentWeek).maybeSingle();
+    _schedHrsOverrides = (oRow && oRow.value) ? oRow.value : {};
+  } catch(e) { console.error('loadFinAliasesAndOverrides failed', e); }
+}
+
+async function applyInvoiceAlias(invoiceName, rosterPersonName) {
+  if (!rosterPersonName) return;
+  _invoiceAliases[normalizeName(invoiceName)] = rosterPersonName;
+  if (_sb && currentUser) {
+    try {
+      await _sb.from('app_config').upsert(
+        { key: 'invoice_name_aliases', value: _invoiceAliases },
+        { onConflict: 'key' }
+      );
+    } catch(e) { console.error('Alias save failed', e); }
+  }
+  // Re-run validation so the flag clears immediately
+  if (invoiceParsed) runInvoiceValidation(invoiceParsed);
+}
+
+async function removeInvoiceAlias(invoiceName) {
+  delete _invoiceAliases[normalizeName(invoiceName)];
+  if (_sb && currentUser) {
+    try {
+      await _sb.from('app_config').upsert(
+        { key: 'invoice_name_aliases', value: _invoiceAliases },
+        { onConflict: 'key' }
+      );
+    } catch(e) {}
+  }
+  if (invoiceParsed) runInvoiceValidation(invoiceParsed);
+}
+
+async function saveScheduleHoursOverride(normalizedName) {
+  const input = document.getElementById('valHrsInput_' + normalizedName);
+  if (!input) return;
+  const hrs = parseFloat(input.value);
+  if (isNaN(hrs) || hrs < 0) { input.style.borderColor = 'var(--bad)'; return; }
+  _schedHrsOverrides[normalizedName] = hrs;
+  if (_sb && currentUser) {
+    try {
+      await _sb.from('app_config').upsert(
+        { key: 'sched_hrs_override_' + _finCurrentWeek, value: _schedHrsOverrides },
+        { onConflict: 'key' }
+      );
+    } catch(e) { console.error('Override save failed', e); }
+  }
+  // Rerun validation and update charts
+  if (invoiceParsed) { runInvoiceValidation(invoiceParsed); renderCostCharts(); }
+}
+
+async function clearScheduleHoursOverride(normalizedName) {
+  delete _schedHrsOverrides[normalizedName];
+  if (_sb && currentUser) {
+    try {
+      await _sb.from('app_config').upsert(
+        { key: 'sched_hrs_override_' + _finCurrentWeek, value: _schedHrsOverrides },
+        { onConflict: 'key' }
+      );
+    } catch(e) {}
+  }
+  if (invoiceParsed) { runInvoiceValidation(invoiceParsed); renderCostCharts(); }
+}
+
 // ==== Invoice Validation ====
 
 let validationRows = [];  // cached for filter/export
 
 function getScheduledHoursForPerson(personName, deptId, weekIso) {
+  // ── Check per-week override set from the financials tab ─────
+  const overrideKey = normalizeName(personName);
+  if (_schedHrsOverrides && _schedHrsOverrides[overrideKey] !== undefined) {
+    return _schedHrsOverrides[overrideKey];
+  }
+  // ────────────────────────────────────────────────────────────
   if (!weekIso || !state.schedules || !state.schedules[weekIso]) return 0;
   const deptSched = state.schedules[weekIso][deptId] || {};
   const dept = (state.roster || []).find(d => d.id === deptId);
@@ -5550,7 +5666,9 @@ function runInvoiceValidation(invoiceData) {
         : `⚠️ Schedule ${absDiff.toFixed(1)} hrs over invoice — possible missed shift entry`;
     }
 
-    validationRows.push({ emp, match, deptName, invoiceHrs, schedHrs, diff, status, rowClass, action });
+    const invNorm = normalizeName(emp.name);
+    const alias   = _invoiceAliases[invNorm] || null;
+    validationRows.push({ emp, match, deptName, invoiceHrs, schedHrs, diff, status, rowClass, action, alias });
   });
 
   renderValidationTable('all');
@@ -5590,11 +5708,63 @@ function runInvoiceValidation(invoiceData) {
 function renderValidationTable(filter) {
   const tbody = document.getElementById('validationBody');
   if (!tbody) return;
+
+  // Pre-build roster dropdown options once
+  const rosterOpts = ['<option value="">— link to roster person —</option>'];
+  (state.roster || []).forEach(dept => {
+    dept.people.forEach(p => {
+      rosterOpts.push(`<option value="${p.name.replace(/"/g,'&quot;')}">${p.name} — ${dept.name}</option>`);
+    });
+  });
+  const rosterOptHtml = rosterOpts.join('');
+
   tbody.innerHTML = validationRows.map(r => {
-    const hidden = (filter !== 'all' && r.status !== filter) ? ' val-hidden' : '';
+    const hidden  = (filter !== 'all' && r.status !== filter) ? ' val-hidden' : '';
     const diffStr = r.diff === 0 ? '—'
       : (r.diff > 0 ? `<span style="color:var(--bad)">+${r.diff.toFixed(1)}</span>`
                     : `<span style="color:#92400e">${r.diff.toFixed(1)}</span>`);
+
+    const empNameSafe = r.emp.name.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+    const normName    = normalizeName(r.emp.name);
+    const hasOverride = _schedHrsOverrides[normName] !== undefined;
+    const overrideVal = hasOverride ? _schedHrsOverrides[normName] : r.schedHrs;
+
+    // ── Action cell ──────────────────────────────────────────
+    let actionCell;
+    if (r.status === 'err') {
+      // Unmatched — show roster link dropdown (or alias chip if already linked)
+      if (r.alias) {
+        actionCell = `<div class="val-link-wrap">
+          <span class="val-alias-chip">🔗 Linked → ${r.alias}
+            <button class="val-alias-remove" title="Remove link" onclick="removeInvoiceAlias('${empNameSafe}')">×</button>
+          </span>
+          <span style="font-size:11px;color:var(--muted);">Reload invoice or re-navigate week to apply</span>
+        </div>`;
+      } else {
+        actionCell = `<div class="val-link-wrap">
+          <select class="val-link-select" onchange="applyInvoiceAlias('${empNameSafe}', this.value)">
+            ${rosterOptHtml}
+          </select>
+          <span style="font-size:11px;color:var(--muted);">Pick the matching roster person</span>
+        </div>`;
+      }
+    } else {
+      // Matched — show editable scheduled-hours cell
+      const inputClass = hasOverride ? 'val-hrs-input overridden' : 'val-hrs-input';
+      actionCell = `<div class="val-hrs-wrap">
+        <div class="val-hrs-row">
+          <input type="number" class="${inputClass}" id="valHrsInput_${normName}"
+            value="${overrideVal.toFixed(1)}" min="0" max="100" step="0.5"
+            title="Override scheduled hours for this employee this week">
+          <button class="btn-light val-hrs-save" onclick="saveScheduleHoursOverride('${normName}')">✓ Set</button>
+          ${hasOverride ? `<button class="btn-light val-hrs-save" style="color:var(--bad)" onclick="clearScheduleHoursOverride('${normName}')" title="Remove override">✕</button>` : ''}
+        </div>
+        ${hasOverride ? '<span class="val-override-badge">⚡ Override active</span>' : ''}
+        ${r.status !== 'ok' ? `<div style="font-size:11px;color:var(--muted);margin-top:2px;">${r.action}</div>` : ''}
+      </div>`;
+    }
+    // ────────────────────────────────────────────────────────
+
     return `<tr class="${r.rowClass}${hidden}">
       <td><strong>${r.emp.name}</strong></td>
       <td><span style="font-size:11px;background:#e0e7ff;color:#3730a3;padding:2px 7px;border-radius:8px;">${r.emp.category}</span></td>
@@ -5604,7 +5774,7 @@ function renderValidationTable(filter) {
       <td>${diffStr}</td>
       <td>$${(r.emp.total||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
       <td><span class="val-status-chip ${r.status}">${r.status==='ok'?'✅ Match':r.status==='warn'?'⚠️ Review':'🔴 Missing'}</span></td>
-      <td class="val-action">${r.action}</td>
+      <td class="val-action" style="min-width:200px;">${actionCell}</td>
     </tr>`;
   }).join('');
 
@@ -5753,39 +5923,4 @@ function renderCostChartKPIs() {
   const payroll  = invoiceParsed.grand_total || 0;
   const revenue  = parseFloat(document.getElementById('f_revenue_total')?.value)  || 0;
   const overhead = parseFloat(document.getElementById('f_overhead')?.value) || 0;
-  const margin   = revenue - payroll - overhead;
-  const employees= invoiceParsed.employees || [];
-  const totalHrs = employees.reduce((s,e) => s+(e.reg_hours||0)+(e.ot_hours||0), 0);
-  const avgRate  = totalHrs > 0 ? payroll / totalHrs : 0;
-  const fmt = n => '$' + Math.round(n).toLocaleString();
-  wrap.innerHTML = `
-    <div class="kpi-card red"   ><div class="kpi-val">${fmt(payroll)}</div><div class="kpi-label">Agency Invoice</div></div>
-    <div class="kpi-card"       ><div class="kpi-val">${fmt(overhead)}</div><div class="kpi-label">Overhead</div></div>
-    <div class="kpi-card ${margin>=0?'green':'red'}"  ><div class="kpi-val">${fmt(margin)}</div><div class="kpi-label">Gross Margin</div></div>
-    <div class="kpi-card accent"><div class="kpi-val">${revenue>0?(margin/revenue*100).toFixed(1)+'%':'—'}</div><div class="kpi-label">Margin %</div></div>
-    <div class="kpi-card"       ><div class="kpi-val">${totalHrs.toFixed(0)} hrs</div><div class="kpi-label">Invoice Hours</div></div>
-    <div class="kpi-card accent"><div class="kpi-val">$${avgRate.toFixed(2)}</div><div class="kpi-label">Avg Billed/Hr</div></div>
-    <div class="kpi-card"       ><div class="kpi-val">${employees.length}</div><div class="kpi-label">Employees</div></div>
-  `;
-}
-
-// ==== Init ====
-
-(async function init() {
-  state.currentWeekStart = isoDate(getMondayOf(new Date()));
-  state.currentView = 'schedule';
-  // Set up auth listener first (so UI reflects login state immediately)
-  setupAuthListener();
-  // Load data (local cache first, then Supabase)
-  const hadData = await load();
-  if (!hadData || !state.roster) { state.roster = JSON.parse(JSON.stringify(TEMPLATE.departments)); }
-  if (!state.shiftPresets || !state.shiftPresets.length) { state.shiftPresets = JSON.parse(JSON.stringify(DEFAULT_SHIFT_PRESETS)); }
-  render();
-  // Start real-time sync after first render
-  setupRealtimeSync();
-  try { const v=localStorage.getItem(STORAGE_KEY+'_view'); if(v==='dashboard')switchView('dashboard'); else if(v==='reports')switchView('reports'); } catch(e){}
-  refreshDueBanner();
-})();
-</script>
-</body>
-</html>
+  const margin   = revenue - payroll
