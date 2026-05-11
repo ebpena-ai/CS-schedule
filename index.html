@@ -5923,4 +5923,39 @@ function renderCostChartKPIs() {
   const payroll  = invoiceParsed.grand_total || 0;
   const revenue  = parseFloat(document.getElementById('f_revenue_total')?.value)  || 0;
   const overhead = parseFloat(document.getElementById('f_overhead')?.value) || 0;
-  const margin   = revenue - payroll
+  const margin   = revenue - payroll - overhead;
+  const employees= invoiceParsed.employees || [];
+  const totalHrs = employees.reduce((s,e) => s+(e.reg_hours||0)+(e.ot_hours||0), 0);
+  const avgRate  = totalHrs > 0 ? payroll / totalHrs : 0;
+  const fmt = n => '$' + Math.round(n).toLocaleString();
+  wrap.innerHTML = `
+    <div class="kpi-card red"   ><div class="kpi-val">${fmt(payroll)}</div><div class="kpi-label">Agency Invoice</div></div>
+    <div class="kpi-card"       ><div class="kpi-val">${fmt(overhead)}</div><div class="kpi-label">Overhead</div></div>
+    <div class="kpi-card ${margin>=0?'green':'red'}"  ><div class="kpi-val">${fmt(margin)}</div><div class="kpi-label">Gross Margin</div></div>
+    <div class="kpi-card accent"><div class="kpi-val">${revenue>0?(margin/revenue*100).toFixed(1)+'%':'—'}</div><div class="kpi-label">Margin %</div></div>
+    <div class="kpi-card"       ><div class="kpi-val">${totalHrs.toFixed(0)} hrs</div><div class="kpi-label">Invoice Hours</div></div>
+    <div class="kpi-card accent"><div class="kpi-val">$${avgRate.toFixed(2)}</div><div class="kpi-label">Avg Billed/Hr</div></div>
+    <div class="kpi-card"       ><div class="kpi-val">${employees.length}</div><div class="kpi-label">Employees</div></div>
+  `;
+}
+
+// ==== Init ====
+
+(async function init() {
+  state.currentWeekStart = isoDate(getMondayOf(new Date()));
+  state.currentView = 'schedule';
+  // Set up auth listener first (so UI reflects login state immediately)
+  setupAuthListener();
+  // Load data (local cache first, then Supabase)
+  const hadData = await load();
+  if (!hadData || !state.roster) { state.roster = JSON.parse(JSON.stringify(TEMPLATE.departments)); }
+  if (!state.shiftPresets || !state.shiftPresets.length) { state.shiftPresets = JSON.parse(JSON.stringify(DEFAULT_SHIFT_PRESETS)); }
+  render();
+  // Start real-time sync after first render
+  setupRealtimeSync();
+  try { const v=localStorage.getItem(STORAGE_KEY+'_view'); if(v==='dashboard')switchView('dashboard'); else if(v==='reports')switchView('reports'); } catch(e){}
+  refreshDueBanner();
+})();
+</script>
+</body>
+</html>
