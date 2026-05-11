@@ -4830,11 +4830,7 @@ async function deleteInvoice(week) {
   const inv = invoiceCacheByWeek[week] ||
     (() => { try { const r = localStorage.getItem('cs_inv_' + week); return r ? JSON.parse(r) : null; } catch(e) { return null; } })();
   const invNo = inv ? inv.invoice_no : 'this week';
-  if (!confirm('Delete invoice ' + invNo + ' (week of ' + week + ')?
-
-This will remove the employee breakdown and zero out the payroll total for this week. Revenue, overhead, and other fields are kept.
-
-This cannot be undone.')) return;
+  if (!confirm('Delete invoice ' + invNo + ' (week of ' + week + ')?\n\nThis will remove the employee breakdown and zero out the payroll total. Revenue and overhead are kept.\n\nThis cannot be undone.')) return;
 
   try {
     if (_sb && currentUser) {
