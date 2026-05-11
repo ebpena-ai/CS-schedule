@@ -1161,6 +1161,23 @@
   /* View-only overlay hint */
   body.view-only .edit-guard { pointer-events:none !important; opacity:.55 !important; cursor:not-allowed !important; }
   body.view-only .toolbar { pointer-events:none; opacity:.55; }
+  /* Financials tab — hide schedule chrome */
+  body.tab-financials .toolbar { display: none !important; }
+  body.tab-financials .summary-bar { display: none !important; }
+  /* Financials sub-navigation */
+  .fin-sub-nav { display:flex; gap:10px; padding:14px 24px 0; }
+  .fin-sub-btn { background:transparent; border:1.5px solid var(--line-strong); color:var(--ink-soft); padding:8px 22px; border-radius:20px; font-size:13px; font-weight:500; cursor:pointer; transition:all .15s; }
+  .fin-sub-btn:hover { border-color:var(--primary); color:var(--primary); background:var(--primary-soft); }
+  .fin-sub-btn.active { background:var(--primary); border-color:var(--primary); color:#fff; }
+  /* Editable invoice table */
+  .inv-edit-input { width:76px; padding:4px 6px; border:1px solid var(--line-strong); border-radius:4px; font-size:12px; font-family:inherit; text-align:right; background:var(--bg); }
+  .inv-edit-input:focus { outline:2px solid var(--primary-soft); border-color:var(--primary); }
+  .inv-edit-name { width:140px; text-align:left; }
+  /* Empty / loading states */
+  .fin-empty-state { display:flex; flex-direction:column; align-items:center; justify-content:center; padding:48px 24px; color:var(--ink-soft); gap:10px; }
+  .fin-empty-state .big-icon { font-size:48px; opacity:.4; }
+  .fin-empty-state p { font-size:14px; margin:0; text-align:center; max-width:340px; }
+  .cum-chart-title { font-size:12px; font-weight:700; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.5px; margin-bottom:10px; }
   body.view-only .view-only-banner { display:flex !important; }
   .view-only-banner { display:none; background:#fef9c3; border-bottom:1px solid #fde68a; padding:7px 18px; font-size:13px; color:#92400e; align-items:center; gap:10px; }
   .view-only-banner strong { font-weight:700; }
@@ -1587,21 +1604,123 @@
   <!-- FINANCIALS TAB (admin only)                                  -->
   <!-- ============================================================ -->
   <div id="financialsContainer" style="display:none">
-    <div class="metrics-wrap">
 
-      <!-- Payroll by Department -->
-      <div class="metrics-card" id="fin_payrollByDeptCard">
+    <!-- Sub-page navigation -->
+    <div class="fin-sub-nav">
+      <button class="fin-sub-btn active" id="finBtn_weekly" onclick="switchFinSubPage('weekly')">📅 Weekly</button>
+      <button class="fin-sub-btn" id="finBtn_cumulative" onclick="switchFinSubPage('cumulative')">📈 Cumulative</button>
+      <div style="margin-left:auto;font-size:12px;color:var(--muted);align-self:center;" id="finSubWeekLabel"></div>
+    </div>
+
+    <!-- ===== WEEKLY SUB-PAGE ===== -->
+    <div id="fin_weeklyPage" class="metrics-wrap">
+
+      <!-- Always-visible chart card -->
+      <div class="metrics-card" id="costChartCard">
         <div class="metrics-card-header">
-          <h3>👥 Payroll by Department</h3>
-          <button class="btn-light" onclick="openRatesModal()">⚙ Edit Hourly Rates</button>
+          <h3>📊 Weekly Operating Costs</h3>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <select id="chartTypeSelect" onchange="renderCostCharts()" style="font-size:12px;padding:4px 8px;border:1px solid var(--line-strong);border-radius:5px;">
+              <option value="breakdown">Cost Breakdown</option>
+              <option value="dept">By Department</option>
+              <option value="category">By Category (Invoice)</option>
+            </select>
+          </div>
         </div>
-        <table class="metrics-table" id="fin_payrollDeptTable">
-          <thead><tr><th>Department</th><th>Avg Rate</th><th>Hours This Week</th><th>Est. Payroll</th><th>% of Total</th></tr></thead>
-          <tbody id="fin_payrollDeptBody"></tbody>
-          <tfoot id="fin_payrollDeptFoot"></tfoot>
-        </table>
+        <!-- Empty state (no invoice yet) -->
+        <div id="chartEmptyState" class="fin-empty-state">
+          <div class="big-icon">📄</div>
+          <p><strong>Upload an invoice below</strong><br>Charts will populate once the invoice is applied.</p>
+          <div style="margin-top:4px;font-size:12px;color:var(--muted);">Scheduled labor hours available in Payroll by Department ↓</div>
+        </div>
+        <!-- Chart content (shown after invoice applied) -->
+        <div id="chartContent" style="display:none">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;padding:18px;">
+            <div style="display:flex;flex-direction:column;align-items:center;">
+              <div class="cum-chart-title" id="chartLeftTitle">Cost Breakdown</div>
+              <div style="position:relative;width:260px;height:260px;">
+                <canvas id="costDonutChart"></canvas>
+                <div id="donutCenter" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;pointer-events:none;">
+                  <div style="font-size:22px;font-weight:800;color:var(--ink);" id="donutCenterVal">—</div>
+                  <div style="font-size:11px;color:var(--muted);">Total Cost</div>
+                </div>
+              </div>
+            </div>
+            <div>
+              <div class="cum-chart-title" id="chartRightTitle">By Department</div>
+              <canvas id="costBarChart" style="max-height:260px;"></canvas>
+            </div>
+          </div>
+          <div class="metrics-kpi-row" id="costChartKPIs" style="padding:0 18px 18px;border-top:1px solid var(--line);padding-top:14px;margin-top:0;"></div>
+        </div>
       </div>
 
+      <!-- Editable invoice editor (persistent after invoice applied) -->
+      <div class="metrics-card" id="fin_invoiceEditorCard" style="display:none">
+        <div class="metrics-card-header">
+          <h3>✏️ Invoice Employee Editor</h3>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <span id="editorInvoiceLabel" style="font-size:12px;color:var(--ink-soft);"></span>
+            <button class="btn-light" onclick="rerunValidationFromEditor()">↻ Recalculate &amp; Validate</button>
+          </div>
+        </div>
+        <div style="padding:14px 18px;">
+          <p style="font-size:12px;color:var(--ink-soft);margin:0 0 12px;">
+            Edit names, rates, or hours inline. Click <strong>Recalculate &amp; Validate</strong> to update totals and re-check against the schedule.
+          </p>
+          <div style="overflow-x:auto;">
+            <table class="metrics-table" id="invoiceEditorTable">
+              <thead><tr>
+                <th>Name</th><th>Category</th><th>Reg Hrs</th><th>OT Hrs</th>
+                <th>Rate ($/hr)</th><th>Calc Total</th><th>Roster Match</th>
+              </tr></thead>
+              <tbody id="invoiceEditorBody"></tbody>
+              <tfoot id="invoiceEditorFoot"></tfoot>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Invoice Validation Card -->
+      <div class="metrics-card" id="invoiceValidationCard" style="display:none">
+        <div class="metrics-card-header">
+          <h3>🔍 Schedule vs Invoice Validation</h3>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <span id="validationSummaryChip" style="font-size:12px;"></span>
+            <button class="btn-light" onclick="exportValidationCSV()">⬇ Export</button>
+          </div>
+        </div>
+        <div style="padding:14px 18px 6px;">
+          <p style="font-size:13px;color:var(--ink-soft);margin:0 0 12px;">
+            Cross-referencing invoice employees and hours against your scheduled week.
+            <strong style="color:var(--ink);">Green</strong> = match &middot;
+            <strong style="color:#92400e;">Yellow</strong> = discrepancy &middot;
+            <strong style="color:var(--bad);">Red</strong> = missing
+          </p>
+          <div style="display:flex;gap:6px;margin-bottom:12px;" id="validationFilterRow">
+            <button class="val-filter-btn active" data-filter="all" onclick="setValidationFilter('all')">All</button>
+            <button class="val-filter-btn" data-filter="ok" onclick="setValidationFilter('ok')">✅ Match</button>
+            <button class="val-filter-btn" data-filter="warn" onclick="setValidationFilter('warn')">⚠️ Discrepancy</button>
+            <button class="val-filter-btn" data-filter="err" onclick="setValidationFilter('err')">🔴 Missing</button>
+          </div>
+        </div>
+        <div style="overflow-x:auto;">
+          <table class="metrics-table" id="validationTable">
+            <thead><tr>
+              <th>Employee</th><th>Category</th><th>Department</th>
+              <th>Invoice Hrs</th><th>Scheduled Hrs</th><th>Difference</th>
+              <th>Invoice Total</th><th>Status</th><th>Action</th>
+            </tr></thead>
+            <tbody id="validationBody"></tbody>
+          </table>
+        </div>
+        <div id="scheduleOnlyWrap" style="display:none;padding:14px 18px;border-top:1px solid var(--line);">
+          <div style="font-size:12px;font-weight:700;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">
+            ⚠️ In Schedule But Not on Invoice
+          </div>
+          <div id="scheduleOnlyList" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
+        </div>
+      </div>
 
       <!-- Invoice Upload Card -->
       <div class="metrics-card" id="invoiceUploadCard">
@@ -1610,7 +1729,6 @@
           <div style="font-size:12px;color:var(--ink-soft);">PDF → AI extracts → matches to your roster → updates financials</div>
         </div>
         <div style="padding:18px;">
-          <!-- Drop zone -->
           <div class="import-drop-zone" id="invoiceDropZone"
                onclick="document.getElementById('invoiceFileInput').click()"
                ondragover="event.preventDefault();this.classList.add('drag-over')"
@@ -1621,13 +1739,10 @@
             <div style="font-size:11px;margin-top:6px;opacity:.7;">Supports multi-page PDFs · Invoice data is never sent anywhere except your own Anthropic API key</div>
           </div>
           <input type="file" id="invoiceFileInput" accept=".pdf" style="display:none" onchange="handleInvoiceFile(this.files[0])">
-
-          <!-- Processing status -->
           <div id="invoiceStatus" style="display:none;margin-top:14px;padding:12px 16px;background:var(--primary-soft);border:1px solid #bfdbfe;border-radius:8px;font-size:13px;color:var(--primary);">
             <span id="invoiceStatusMsg">Processing…</span>
           </div>
-
-          <!-- Preview table -->
+          <!-- Preview (before apply) -->
           <div id="invoicePreviewWrap" style="display:none;margin-top:16px;">
             <div class="import-summary" id="invoiceSummaryBadges"></div>
             <div style="font-size:13px;font-weight:600;margin-bottom:8px;color:var(--ink);">
@@ -1648,88 +1763,21 @@
               <button class="btn-primary" id="invoiceApplyBtn" onclick="applyInvoice()">Apply to Financials</button>
             </div>
           </div>
-
-          <!-- Applied summary -->
           <div id="invoiceAppliedWrap" style="display:none;margin-top:14px;"></div>
         </div>
       </div>
 
-
-      <!-- Invoice Validation Card -->
-      <div class="metrics-card" id="invoiceValidationCard" style="display:none">
+      <!-- Payroll by Department -->
+      <div class="metrics-card" id="fin_payrollByDeptCard">
         <div class="metrics-card-header">
-          <h3>🔍 Schedule vs Invoice Validation</h3>
-          <div style="display:flex;gap:8px;align-items:center;">
-            <span id="validationSummaryChip" style="font-size:12px;"></span>
-            <button class="btn-light" onclick="exportValidationCSV()">⬇ Export</button>
-          </div>
+          <h3>👥 Payroll by Department</h3>
+          <button class="btn-light" onclick="openRatesModal()">⚙ Edit Hourly Rates</button>
         </div>
-        <div style="padding:14px 18px 6px;">
-          <p style="font-size:13px;color:var(--ink-soft);margin:0 0 12px;">
-            Cross-referencing invoice employees and hours against your scheduled week.
-            <strong style="color:var(--ink);">Green</strong> = match · 
-            <strong style="color:#92400e;">Yellow</strong> = discrepancy · 
-            <strong style="color:var(--bad);">Red</strong> = missing
-          </p>
-          <!-- Validation filter tabs -->
-          <div style="display:flex;gap:6px;margin-bottom:12px;" id="validationFilterRow">
-            <button class="val-filter-btn active" data-filter="all" onclick="setValidationFilter('all')">All</button>
-            <button class="val-filter-btn" data-filter="ok" onclick="setValidationFilter('ok')">✅ Match</button>
-            <button class="val-filter-btn" data-filter="warn" onclick="setValidationFilter('warn')">⚠️ Discrepancy</button>
-            <button class="val-filter-btn" data-filter="err" onclick="setValidationFilter('err')">🔴 Missing</button>
-          </div>
-        </div>
-        <div style="overflow-x:auto;">
-          <table class="metrics-table" id="validationTable">
-            <thead><tr>
-              <th>Employee</th><th>Category</th><th>Department</th>
-              <th>Invoice Hrs</th><th>Scheduled Hrs</th><th>Difference</th>
-              <th>Invoice Total</th><th>Status</th><th>Action</th>
-            </tr></thead>
-            <tbody id="validationBody"></tbody>
-          </table>
-        </div>
-        <!-- Unscheduled employees in schedule but not invoice -->
-        <div id="scheduleOnlyWrap" style="display:none;padding:14px 18px;border-top:1px solid var(--line);">
-          <div style="font-size:12px;font-weight:700;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">
-            ⚠️ In Schedule But Not on Invoice
-          </div>
-          <div id="scheduleOnlyList" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
-        </div>
-      </div>
-
-      <!-- Operating Costs Chart Card -->
-      <div class="metrics-card" id="costChartCard" style="display:none">
-        <div class="metrics-card-header">
-          <h3>📊 Weekly Operating Costs</h3>
-          <div style="display:flex;gap:8px;align-items:center;">
-            <select id="chartTypeSelect" onchange="renderCostCharts()" style="font-size:12px;padding:4px 8px;border:1px solid var(--line-strong);border-radius:5px;">
-              <option value="breakdown">Cost Breakdown</option>
-              <option value="dept">By Department</option>
-              <option value="category">By Category (Invoice)</option>
-            </select>
-          </div>
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;padding:18px;">
-          <!-- Donut: Cost breakdown -->
-          <div style="display:flex;flex-direction:column;align-items:center;">
-            <div style="font-size:12px;font-weight:700;color:var(--ink-soft);text-transform:uppercase;margin-bottom:8px;" id="chartLeftTitle">Cost Breakdown</div>
-            <div style="position:relative;width:260px;height:260px;">
-              <canvas id="costDonutChart"></canvas>
-              <div id="donutCenter" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;pointer-events:none;">
-                <div style="font-size:22px;font-weight:800;color:var(--ink);" id="donutCenterVal">—</div>
-                <div style="font-size:11px;color:var(--muted);">Total Cost</div>
-              </div>
-            </div>
-          </div>
-          <!-- Bar: By dept or category -->
-          <div>
-            <div style="font-size:12px;font-weight:700;color:var(--ink-soft);text-transform:uppercase;margin-bottom:8px;" id="chartRightTitle">By Department</div>
-            <canvas id="costBarChart" style="max-height:260px;"></canvas>
-          </div>
-        </div>
-        <!-- KPI strip below charts -->
-        <div class="metrics-kpi-row" id="costChartKPIs" style="padding:0 18px 18px;border-top:1px solid var(--line);padding-top:14px;margin-top:0;"></div>
+        <table class="metrics-table" id="fin_payrollDeptTable">
+          <thead><tr><th>Department</th><th>Avg Rate</th><th>Hours This Week</th><th>Est. Payroll</th><th>% of Total</th></tr></thead>
+          <tbody id="fin_payrollDeptBody"></tbody>
+          <tfoot id="fin_payrollDeptFoot"></tfoot>
+        </table>
       </div>
 
       <!-- Weekly Financial Summary -->
@@ -1750,7 +1798,7 @@
             <label class="metrics-field">Target Payroll ($)<input type="number" id="f_target_payroll" min="0" step="100" placeholder="0.00"></label>
           </div>
           <div class="metrics-group">
-            <div class="metrics-group-title">Overhead & Margin</div>
+            <div class="metrics-group-title">Overhead &amp; Margin</div>
             <label class="metrics-field">Overhead ($)<input type="number" id="f_overhead" min="0" step="100" placeholder="0.00"></label>
             <label class="metrics-field">Target Margin (%)<input type="number" id="f_target_margin" min="0" max="100" step="0.5" placeholder="35.0"></label>
           </div>
@@ -1760,7 +1808,6 @@
             <button class="btn-light" style="margin-top:6px;font-size:12px;" onclick="addRevenueClient()">+ Add Client</button>
           </div>
         </div>
-        <!-- Financial KPIs -->
         <div class="metrics-kpi-row" id="financialKPIs" style="margin-top:14px;">
           <div class="kpi-card green"><div class="kpi-val" id="fkpi_revenue">—</div><div class="kpi-label">Revenue</div></div>
           <div class="kpi-card red"><div class="kpi-val" id="fkpi_payroll">—</div><div class="kpi-label">Payroll</div></div>
@@ -1770,12 +1817,55 @@
           <div class="kpi-card"><div class="kpi-val" id="fkpi_cost_per_order">—</div><div class="kpi-label">Cost / Order</div></div>
           <div class="kpi-card"><div class="kpi-val" id="fkpi_payroll_ratio">—</div><div class="kpi-label">Payroll / Revenue</div></div>
         </div>
-        <!-- Target vs Actual -->
         <div class="target-compare" id="targetCompare" style="margin-top:14px;"></div>
       </div>
 
-    </div>
-  </div>
+    </div><!-- end fin_weeklyPage -->
+
+    <!-- ===== CUMULATIVE SUB-PAGE ===== -->
+    <div id="fin_cumulativePage" class="metrics-wrap" style="display:none">
+
+      <div class="metrics-card" id="fin_cumulativeCard">
+        <div class="metrics-card-header">
+          <h3>📈 Cumulative Financial Trends</h3>
+          <button class="btn-light" onclick="renderFinCumulativePage()">↻ Refresh</button>
+        </div>
+        <div id="fin_cumulative_loading" class="fin-empty-state" style="display:none">
+          <div class="big-icon">⏳</div>
+          <p>Loading historical data…</p>
+        </div>
+        <div id="fin_cumulative_empty" class="fin-empty-state">
+          <div class="big-icon">📊</div>
+          <p><strong>No cumulative data yet.</strong><br>Record weekly metrics and financials and they'll trend here automatically.</p>
+        </div>
+        <div id="fin_cumulative_charts" style="display:none">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;padding:18px;">
+            <div>
+              <div class="cum-chart-title">Revenue vs Payroll vs Overhead ($)</div>
+              <canvas id="cumRevPayChart" style="max-height:260px;"></canvas>
+            </div>
+            <div>
+              <div class="cum-chart-title">Gross Margin %</div>
+              <canvas id="cumMarginChart" style="max-height:260px;"></canvas>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;padding:0 18px 18px;">
+            <div>
+              <div class="cum-chart-title">Cost per Order ($)</div>
+              <canvas id="cumCostPerOrderChart" style="max-height:260px;"></canvas>
+            </div>
+            <div>
+              <div class="cum-chart-title">Weekly Volume (Orders + Cartons)</div>
+              <canvas id="cumVolumeChart" style="max-height:260px;"></canvas>
+            </div>
+          </div>
+          <div class="metrics-kpi-row" id="cumKPIRow" style="padding:0 18px 18px;border-top:1px solid var(--line);padding-top:14px;margin-top:0;"></div>
+        </div>
+      </div>
+
+    </div><!-- end fin_cumulativePage -->
+
+  </div><!-- end financialsContainer -->
 
 
 </main>
@@ -3831,6 +3921,7 @@ function switchView(view) {
   if (fCont) fCont.style.display = view==='financials' ? '' : 'none';
   const fTab = document.getElementById('tab-financials');
   if (fTab) fTab.classList.toggle('active', view==='financials');
+  document.body.classList.toggle('tab-financials', view === 'financials');
   state.currentView = view;
   if (view === 'dashboard') renderDashboard();
   if (view === 'reports') { initReportsTab(); renderSavedReports(); }
@@ -4486,10 +4577,35 @@ async function saveRates() {
 }
 
 
+let _finCurrentSubPage = 'weekly';
+let _invoiceEditorWeek = null;
+let _cumCharts = {};
+
 async function renderFinancialsTab() {
+  // Update week label in sub-nav
+  const lbl = document.getElementById('finSubWeekLabel');
+  if (lbl) {
+    const d = new Date(state.currentWeekStart + 'T00:00:00');
+    lbl.textContent = 'Week of ' + d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+  }
+  // Reset invoice editor when week changes
+  if (_invoiceEditorWeek !== state.currentWeekStart) {
+    _invoiceEditorWeek = state.currentWeekStart;
+    window._invoiceEditorData = null;
+    invoiceParsed = null;
+    const edCard = document.getElementById('fin_invoiceEditorCard');
+    if (edCard) edCard.style.display = 'none';
+    const valCard = document.getElementById('invoiceValidationCard');
+    if (valCard) valCard.style.display = 'none';
+    const cc = document.getElementById('chartContent');
+    const ce = document.getElementById('chartEmptyState');
+    if (cc) cc.style.display = 'none';
+    if (ce) ce.style.display = '';
+    const appWrap = document.getElementById('invoiceAppliedWrap');
+    if (appWrap) { appWrap.style.display = 'none'; appWrap.innerHTML = ''; }
+  }
   await loadMetricsForWeek(state.currentWeekStart);
   renderFinPayrollByDept();
-  // Restore saved financials
   const fin = financialsData[state.currentWeekStart] || {};
   const setVal = (id, val) => { const el = document.getElementById(id); if(el && val !== undefined && val !== null && val !== 0) el.value = val; };
   setVal('f_revenue_total',  fin.revenue_total);
@@ -4504,6 +4620,209 @@ async function renderFinancialsTab() {
     Object.entries(fin.revenue_by_client || {}).forEach(([name, amt]) => addRevenueClient(name, amt));
   }
   renderFinancialKPIs();
+  if (_finCurrentSubPage === 'cumulative') renderFinCumulativePage();
+}
+
+function switchFinSubPage(page) {
+  _finCurrentSubPage = page;
+  const wp = document.getElementById('fin_weeklyPage');
+  const cp = document.getElementById('fin_cumulativePage');
+  if (wp) wp.style.display = page === 'weekly' ? '' : 'none';
+  if (cp) cp.style.display = page === 'cumulative' ? '' : 'none';
+  const bw = document.getElementById('finBtn_weekly');
+  const bc = document.getElementById('finBtn_cumulative');
+  if (bw) bw.classList.toggle('active', page === 'weekly');
+  if (bc) bc.classList.toggle('active', page === 'cumulative');
+  if (page === 'cumulative') renderFinCumulativePage();
+}
+
+// ==== Editable Invoice Editor ====
+
+function renderEditableInvoiceTable(data) {
+  window._invoiceEditorData = JSON.parse(JSON.stringify(data.employees || []));
+  const card = document.getElementById('fin_invoiceEditorCard');
+  if (!card) return;
+  card.style.display = '';
+  const lbl = document.getElementById('editorInvoiceLabel');
+  if (lbl) lbl.textContent = 'Invoice ' + (data.invoice_no||'') + '  ·  ' + (data.pay_period_start||'') + ' – ' + (data.pay_period_end||'');
+  _renderEditorRows();
+}
+
+function _renderEditorRows() {
+  const employees = window._invoiceEditorData || [];
+  const tbody = document.getElementById('invoiceEditorBody');
+  const tfoot = document.getElementById('invoiceEditorFoot');
+  if (!tbody) return;
+  tbody.innerHTML = employees.map((emp, i) => {
+    const match = matchEmployeeToRoster(emp.name);
+    const matchCell = (match && match.score >= 70)
+      ? `<span class="inv-match-chip ok">✓ ${match.person.name}</span> <small style="color:var(--muted)">${match.dept.name}</small>`
+      : `<span class="inv-match-chip warn">? Unmatched</span>`;
+    const safeN = (emp.name||'').replace(/"/g,'&quot;');
+    return `<tr>
+      <td><input class="inv-edit-input inv-edit-name" type="text" value="${safeN}" oninput="updateInvoiceEditor(${i},'name',this.value)"></td>
+      <td><span style="font-size:11px;background:#e0e7ff;color:#3730a3;padding:2px 7px;border-radius:8px;">${emp.category||''}</span></td>
+      <td><input class="inv-edit-input" type="number" min="0" step="0.5" value="${emp.reg_hours||0}" oninput="updateInvoiceEditor(${i},'reg_hours',parseFloat(this.value)||0)"></td>
+      <td><input class="inv-edit-input" type="number" min="0" step="0.5" value="${emp.ot_hours||0}" oninput="updateInvoiceEditor(${i},'ot_hours',parseFloat(this.value)||0)"></td>
+      <td><input class="inv-edit-input" type="number" min="0" step="0.01" value="${emp.employee_rate||0}" oninput="updateInvoiceEditor(${i},'employee_rate',parseFloat(this.value)||0)"></td>
+      <td id="ed_tot_${i}"><strong>$${(emp.total||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</strong></td>
+      <td>${matchCell}</td>
+    </tr>`;
+  }).join('');
+  _updateEditorFooter();
+}
+
+function _updateEditorFooter() {
+  const tfoot = document.getElementById('invoiceEditorFoot');
+  if (!tfoot) return;
+  const gt = (window._invoiceEditorData||[]).reduce((s,e)=>s+(e.total||0),0);
+  tfoot.innerHTML = `<tr><td colspan="5"><strong>Total</strong></td><td><strong>$${gt.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</strong></td><td></td></tr>`;
+}
+
+function updateInvoiceEditor(idx, field, value) {
+  if (!window._invoiceEditorData) return;
+  window._invoiceEditorData[idx][field] = value;
+  // Recalc total: reg*rate + ot*1.5*rate
+  const emp = window._invoiceEditorData[idx];
+  const newTotal = ((emp.reg_hours||0) + (emp.ot_hours||0)*1.5) * (emp.employee_rate||0);
+  window._invoiceEditorData[idx].total = newTotal;
+  const cell = document.getElementById('ed_tot_'+idx);
+  if (cell) cell.innerHTML = '<strong>$'+newTotal.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+'</strong>';
+  _updateEditorFooter();
+}
+
+function rerunValidationFromEditor() {
+  if (!window._invoiceEditorData || !invoiceParsed) return;
+  const newTotal = (window._invoiceEditorData).reduce((s,e)=>s+(e.total||0),0);
+  invoiceParsed = { ...invoiceParsed, employees: window._invoiceEditorData, grand_total: newTotal };
+  _renderEditorRows();
+  runInvoiceValidation(invoiceParsed);
+  renderCostCharts();
+  const pel = document.getElementById('f_payroll_total');
+  if (pel) pel.value = newTotal.toFixed(2);
+  renderFinancialKPIs();
+}
+
+// ==== Cumulative Trends ====
+
+async function renderFinCumulativePage() {
+  const loading = document.getElementById('fin_cumulative_loading');
+  const empty   = document.getElementById('fin_cumulative_empty');
+  const charts  = document.getElementById('fin_cumulative_charts');
+  if (!loading||!empty||!charts) return;
+  loading.style.display = '';
+  empty.style.display   = 'none';
+  charts.style.display  = 'none';
+  try {
+    if (!_sb) { loading.style.display='none'; empty.style.display=''; return; }
+    const [{ data: finData }, { data: metData }] = await Promise.all([
+      _sb.from('financials_weekly')
+        .select('week_iso,revenue_total,payroll_total,overhead,target_revenue,target_payroll,target_margin_pct')
+        .order('week_iso', { ascending: true }),
+      _sb.from('metrics_daily')
+        .select('metric_date,orders_b2b,orders_ecom,cartons_shipped_b2b,units_shipped')
+        .order('metric_date', { ascending: true })
+    ]);
+    loading.style.display = 'none';
+    if (!finData || finData.length === 0) { empty.style.display=''; return; }
+    charts.style.display = '';
+
+    // Aggregate metrics by week
+    const metByWeek = {};
+    (metData||[]).forEach(row => {
+      const d  = new Date(row.metric_date + 'T00:00:00');
+      const wk = isoDate(getMondayOf(d));
+      if (!metByWeek[wk]) metByWeek[wk] = {orders_b2b:0,orders_ecom:0,cartons_shipped_b2b:0,units_shipped:0};
+      metByWeek[wk].orders_b2b         += (row.orders_b2b||0);
+      metByWeek[wk].orders_ecom        += (row.orders_ecom||0);
+      metByWeek[wk].cartons_shipped_b2b+= (row.cartons_shipped_b2b||0);
+      metByWeek[wk].units_shipped      += (row.units_shipped||0);
+    });
+
+    const weeks    = finData.map(r=>r.week_iso);
+    const labels   = weeks.map(w=>{ const d=new Date(w+'T00:00:00'); return d.toLocaleDateString('en-US',{month:'short',day:'numeric'}); });
+    const revenues = finData.map(r=>r.revenue_total||0);
+    const payrolls = finData.map(r=>r.payroll_total||0);
+    const overheads= finData.map(r=>r.overhead||0);
+    const margins  = finData.map(r=>{ const rv=r.revenue_total||0,py=r.payroll_total||0,ov=r.overhead||0; return rv>0?parseFloat(((rv-py-ov)/rv*100).toFixed(1)):null; });
+    const totalOrders   = weeks.map(w=>{ const m=metByWeek[w]||{}; return (m.orders_b2b||0)+(m.orders_ecom||0); });
+    const costPerOrder  = weeks.map((w,i)=>{ const tot=totalOrders[i],cost=(payrolls[i]||0)+(overheads[i]||0); return tot>0?parseFloat((cost/tot).toFixed(2)):null; });
+    const cartons = weeks.map(w=>(metByWeek[w]||{}).cartons_shipped_b2b||0);
+
+    const mkChart = (id, cfg) => {
+      const c = document.getElementById(id); if (!c) return;
+      const ctx = c.getContext('2d');
+      if (_cumCharts[id]) _cumCharts[id].destroy();
+      _cumCharts[id] = new Chart(ctx, cfg);
+    };
+
+    // Chart 1 — Revenue vs Payroll vs Overhead
+    mkChart('cumRevPayChart',{
+      type:'bar',
+      data:{ labels, datasets:[
+        {label:'Revenue', data:revenues, backgroundColor:'#22c55e', borderRadius:4},
+        {label:'Payroll', data:payrolls, backgroundColor:'#ef4444', borderRadius:4},
+        {label:'Overhead',data:overheads,backgroundColor:'#f97316', borderRadius:4}
+      ]},
+      options:{ plugins:{legend:{position:'bottom'}},
+        scales:{y:{ticks:{callback:v=>'$'+Math.round(v).toLocaleString()}}},
+        animation:{duration:600} }
+    });
+
+    // Chart 2 — Gross Margin %
+    mkChart('cumMarginChart',{
+      type:'line',
+      data:{ labels, datasets:[{
+        label:'Gross Margin %', data:margins,
+        borderColor:'#6366f1', backgroundColor:'rgba(99,102,241,.12)',
+        tension:0.3, fill:true, pointRadius:5, pointBackgroundColor:'#6366f1'
+      }]},
+      options:{ plugins:{legend:{display:false}},
+        scales:{y:{ticks:{callback:v=>v+'%'}}},
+        animation:{duration:600} }
+    });
+
+    // Chart 3 — Cost per Order
+    mkChart('cumCostPerOrderChart',{
+      type:'line',
+      data:{ labels, datasets:[{
+        label:'Cost / Order', data:costPerOrder,
+        borderColor:'#f97316', backgroundColor:'rgba(249,115,22,.1)',
+        tension:0.3, fill:true, pointRadius:5, pointBackgroundColor:'#f97316'
+      }]},
+      options:{ plugins:{legend:{display:false}},
+        scales:{y:{ticks:{callback:v=>'$'+v}}},
+        animation:{duration:600} }
+    });
+
+    // Chart 4 — Volume
+    mkChart('cumVolumeChart',{
+      type:'bar',
+      data:{ labels, datasets:[
+        {label:'Total Orders',    data:totalOrders, backgroundColor:'#6366f1', borderRadius:4},
+        {label:'Cartons Shipped', data:cartons,     backgroundColor:'#0ea5e9', borderRadius:4}
+      ]},
+      options:{ plugins:{legend:{position:'bottom'}}, animation:{duration:600} }
+    });
+
+    // KPI summary row
+    const avgRev = revenues.reduce((s,v)=>s+v,0)/revenues.length;
+    const avgPay = payrolls.reduce((s,v)=>s+v,0)/payrolls.length;
+    const mArr   = margins.filter(v=>v!==null).map(Number);
+    const avgMar = mArr.length>0 ? mArr.reduce((s,v)=>s+v,0)/mArr.length : 0;
+    const fmtK   = n => '$'+(n>=1000?(n/1000).toFixed(1)+'k':Math.round(n).toLocaleString());
+    document.getElementById('cumKPIRow').innerHTML = `
+      <div class="kpi-card green"><div class="kpi-val">${fmtK(avgRev)}</div><div class="kpi-label">Avg Weekly Revenue</div></div>
+      <div class="kpi-card red">  <div class="kpi-val">${fmtK(avgPay)}</div><div class="kpi-label">Avg Weekly Payroll</div></div>
+      <div class="kpi-card accent"><div class="kpi-val">${avgMar.toFixed(1)}%</div><div class="kpi-label">Avg Margin %</div></div>
+      <div class="kpi-card"><div class="kpi-val">${weeks.length}</div><div class="kpi-label">Weeks of Data</div></div>`;
+  } catch(e) {
+    if (loading) loading.style.display = 'none';
+    if (empty)   empty.style.display   = '';
+    const p = empty.querySelector('p');
+    if (p) p.innerHTML = '<strong>Error loading data.</strong><br>' + e.message;
+    console.error('Cumulative load error', e);
+  }
 }
 
 function renderFinPayrollByDept() {
@@ -4794,6 +5113,10 @@ async function applyInvoice() {
 
   renderFinancialKPIs();
   renderTargetCompare();
+  // Show persistent editable editor + validation + charts
+  renderEditableInvoiceTable(data);
+  runInvoiceValidation(data);
+  renderCostCharts();
 }
 
 function clearInvoicePreview() {
@@ -4988,9 +5311,15 @@ let donutChartInst = null;
 let barChartInst   = null;
 
 function renderCostCharts() {
-  const card = document.getElementById('costChartCard');
-  if (!invoiceParsed) return;
-  card.style.display = '';
+  const emptyEl   = document.getElementById('chartEmptyState');
+  const contentEl = document.getElementById('chartContent');
+  if (!invoiceParsed) {
+    if (emptyEl)   emptyEl.style.display   = '';
+    if (contentEl) contentEl.style.display = 'none';
+    return;
+  }
+  if (emptyEl)   emptyEl.style.display   = 'none';
+  if (contentEl) contentEl.style.display = '';
   const chartType = document.getElementById('chartTypeSelect')?.value || 'breakdown';
   renderDonutChart();
   if (chartType === 'dept') renderBarByDept();
