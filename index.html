@@ -4749,64 +4749,90 @@ async function loadInvoiceHistory() {
   }
   container.innerHTML = '<div class="inv-hist-empty">Loading…</div>';
   try {
-    // Fetch all invoice_emp_* keys from app_config
-    const { data: rows, error } = await _sb
+    // Fetch full invoice records from app_config
+    const { data: cfgRows } = await _sb
       .from('app_config')
       .select('key, value, updated_at')
       .like('key', 'invoice_emp_%')
       .order('key', { ascending: false });
 
-    if (error) throw error;
+    // Also fetch ALL financials_weekly rows that have any payroll recorded
+    // (catches invoices applied before app_config save was added)
+    const { data: finRows } = await _sb
+      .from('financials_weekly')
+      .select('week_iso, payroll_total, notes, updated_at')
+      .gt('payroll_total', 0)
+      .order('week_iso', { ascending: false });
 
-    if (!rows || rows.length === 0) {
+    // Build a merged map keyed by week — full record wins over legacy
+    const byWeek = {};
+    // First add legacy entries from financials_weekly
+    (finRows || []).forEach(r => {
+      byWeek[r.week_iso] = { week: r.week_iso, type: 'legacy', payroll: r.payroll_total, notes: r.notes, updatedAt: r.updated_at };
+    });
+    // Then overwrite with full records from app_config
+    (cfgRows || []).forEach(r => {
+      const week = r.key.replace('invoice_emp_', '');
+      byWeek[week] = { week, type: 'full', inv: r.value || {}, updatedAt: r.updated_at };
+    });
+
+    const entries = Object.values(byWeek).sort((a,b) => b.week.localeCompare(a.week));
+
+    if (entries.length === 0) {
       container.innerHTML = '<div class="inv-hist-empty">No invoices on record yet. Upload an invoice to get started.</div>';
       if (badge) badge.textContent = '';
       return;
     }
 
-    if (badge) badge.textContent = rows.length + ' invoice' + (rows.length > 1 ? 's' : '') + ' on file';
+    if (badge) badge.textContent = entries.length + ' record' + (entries.length > 1 ? 's' : '') + ' on file';
 
-    const fmt = n => '$' + (n||0).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
-    const fmtDate = s => { try { return new Date(s).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit'}); } catch(e) { return s||'—'; } };
+    const fmt    = n => '$' + (n||0).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+    const fmtDt  = s => { try { return new Date(s).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}); } catch(e) { return s||'—'; } };
 
-    const tableRows = rows.map(row => {
-      const week = row.key.replace('invoice_emp_', '');
-      const inv  = row.value || {};
-      const isCurrent = week === _finCurrentWeek;
-      const empCount = (inv.employees || []).length;
-      const updatedAt = fmtDate(row.updated_at);
-      return `<tr class="${isCurrent ? 'inv-hist-active' : ''}" id="invHistRow_${week}">
-        <td>
-          <div style="font-weight:600;font-size:12px;">${week}</div>
-          ${isCurrent ? '<span style="font-size:10px;background:#dcfce7;color:#166534;padding:1px 6px;border-radius:8px;">Current</span>' : ''}
-        </td>
-        <td><strong>${inv.invoice_no || '—'}</strong></td>
-        <td style="font-size:12px;">${inv.pay_period_start||'—'} – ${inv.pay_period_end||'—'}</td>
-        <td style="text-align:center;">${empCount}</td>
-        <td><strong>${fmt(inv.grand_total)}</strong></td>
-        <td style="font-size:11px;color:var(--muted);">${updatedAt}</td>
-        <td>
-          <div style="display:flex;gap:6px;">
-            <button class="btn-light" style="font-size:11px;padding:4px 10px;" onclick="editInvoice('${week}')">✏️ Edit</button>
-            <button class="btn-light" style="font-size:11px;padding:4px 10px;color:var(--bad);border-color:#fca5a5;" onclick="deleteInvoice('${week}')">🗑 Delete</button>
-          </div>
-        </td>
-      </tr>`;
+    const tableRows = entries.map(entry => {
+      const isCurrent = entry.week === _finCurrentWeek;
+      const curBadge  = isCurrent ? '<span style="font-size:10px;background:#dcfce7;color:#166534;padding:1px 6px;border-radius:8px;margin-left:4px;">Current</span>' : '';
+
+      if (entry.type === 'full') {
+        const inv = entry.inv;
+        return `<tr class="${isCurrent ? 'inv-hist-active' : ''}" id="invHistRow_${entry.week}">
+          <td><span style="font-weight:600;font-size:12px;">${entry.week}</span>${curBadge}</td>
+          <td><strong>${inv.invoice_no || '—'}</strong></td>
+          <td style="font-size:12px;">${inv.pay_period_start||'—'} – ${inv.pay_period_end||'—'}</td>
+          <td style="text-align:center;">${(inv.employees||[]).length}</td>
+          <td><strong>${fmt(inv.grand_total)}</strong></td>
+          <td style="font-size:11px;color:var(--muted);">${fmtDt(entry.updatedAt)}</td>
+          <td><div style="display:flex;gap:6px;">
+            <button class="btn-light" style="font-size:11px;padding:4px 10px;" onclick="editInvoice('${entry.week}')">✏️ Edit</button>
+            <button class="btn-light" style="font-size:11px;padding:4px 10px;color:var(--bad);border-color:#fca5a5;" onclick="deleteInvoice('${entry.week}')">🗑 Delete</button>
+          </div></td>
+        </tr>`;
+      } else {
+        // Legacy — no employee detail, only payroll total from financials_weekly
+        const invNo = (entry.notes||'').match(/Invoice ([^\s—]+)/)?.[1] || '—';
+        const period = (entry.notes||'').match(/(\d[\d\/\-]+) to ([\d\/\-]+)/);
+        const periodStr = period ? period[1] + ' – ' + period[2] : '—';
+        return `<tr class="${isCurrent ? 'inv-hist-active' : ''}" id="invHistRow_${entry.week}">
+          <td><span style="font-weight:600;font-size:12px;">${entry.week}</span>${curBadge}</td>
+          <td><strong>${invNo}</strong> <span style="font-size:10px;background:#fef3c7;color:#92400e;padding:1px 6px;border-radius:8px;margin-left:4px;">Legacy</span></td>
+          <td style="font-size:12px;">${periodStr}</td>
+          <td style="text-align:center;color:var(--muted);">—</td>
+          <td><strong>${fmt(entry.payroll)}</strong></td>
+          <td style="font-size:11px;color:var(--muted);">${fmtDt(entry.updatedAt)}</td>
+          <td><div style="display:flex;gap:6px;">
+            <button class="btn-light" style="font-size:11px;padding:4px 10px;color:var(--bad);border-color:#fca5a5;" onclick="deleteInvoice('${entry.week}')">🗑 Delete</button>
+          </div></td>
+        </tr>`;
+      }
     }).join('');
 
     container.innerHTML = `
       <table class="inv-hist-table">
-        <thead>
-          <tr>
-            <th>Week</th>
-            <th>Invoice #</th>
-            <th>Pay Period</th>
-            <th style="text-align:center;">Employees</th>
-            <th>Total Payroll</th>
-            <th>Applied</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
+        <thead><tr>
+          <th>Week</th><th>Invoice #</th><th>Pay Period</th>
+          <th style="text-align:center;">Employees</th><th>Total Payroll</th>
+          <th>Applied</th><th>Actions</th>
+        </tr></thead>
         <tbody>${tableRows}</tbody>
       </table>`;
   } catch(e) {
