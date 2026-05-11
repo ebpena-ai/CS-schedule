@@ -1178,6 +1178,15 @@
   .fin-empty-state .big-icon { font-size:48px; opacity:.4; }
   .fin-empty-state p { font-size:14px; margin:0; text-align:center; max-width:340px; }
   .cum-chart-title { font-size:12px; font-weight:700; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.5px; margin-bottom:10px; }
+  /* Invoice history */
+  .inv-hist-table { width:100%; border-collapse:collapse; font-size:13px; }
+  .inv-hist-table th { background:var(--off-soft); font-weight:600; text-align:left; padding:8px 12px; border-bottom:2px solid var(--line-strong); white-space:nowrap; }
+  .inv-hist-table td { padding:8px 12px; border-bottom:1px solid var(--line); vertical-align:middle; }
+  .inv-hist-table tr:hover td { background:var(--primary-soft); }
+  .inv-hist-active td { background:#f0fdf4 !important; }
+  .inv-hist-empty { padding:28px; text-align:center; color:var(--muted); font-size:13px; }
+  .hist-collapse-btn { background:none; border:none; font-size:12px; color:var(--ink-soft); cursor:pointer; padding:2px 8px; border-radius:4px; }
+  .hist-collapse-btn:hover { background:var(--off-soft); color:var(--ink); }
   /* Financials independent week nav */
   .fin-week-nav { display:flex; align-items:center; gap:10px; padding:10px 24px 0; }
   .fin-week-nav-btn { background:rgba(255,255,255,.9); border:1.5px solid var(--line-strong); color:var(--ink); width:32px; height:32px; border-radius:6px; font-size:16px; cursor:pointer; display:flex; align-items:center; justify-content:center; line-height:1; padding:0; transition:all .15s; }
@@ -1626,6 +1635,21 @@
 
     <!-- ===== WEEKLY SUB-PAGE ===== -->
     <div id="fin_weeklyPage" class="metrics-wrap">
+
+      <!-- Invoice Upload History -->
+      <div class="metrics-card" id="invoiceHistoryCard">
+        <div class="metrics-card-header" style="cursor:pointer;" onclick="toggleInvoiceHistory()">
+          <h3>📋 Invoice Upload History</h3>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <span id="invHistBadge" style="font-size:12px;color:var(--ink-soft);"></span>
+            <button class="btn-light" onclick="event.stopPropagation();loadInvoiceHistory()" title="Refresh">↻ Refresh</button>
+            <button class="hist-collapse-btn" id="invHistToggleBtn">▲ Collapse</button>
+          </div>
+        </div>
+        <div id="invoiceHistoryBody" style="overflow-x:auto;">
+          <div class="inv-hist-empty">Loading invoice history…</div>
+        </div>
+      </div>
 
       <!-- Always-visible chart card -->
       <div class="metrics-card" id="costChartCard">
@@ -4628,6 +4652,8 @@ async function renderFinancialsTab() {
   await loadMetricsForWeek(_finCurrentWeek);
   // Unconditionally restore invoice state — runs every time tab opens
   _restoreInvoiceForWeek(_finCurrentWeek);
+  // Load (or refresh) the history panel
+  loadInvoiceHistory();
   renderFinPayrollByDept();
   const fin = financialsData[_finCurrentWeek] || {};
   const setVal = (id, val) => { const el = document.getElementById(id); if(el && val !== undefined && val !== null && val !== 0) el.value = val; };
@@ -4699,6 +4725,146 @@ function switchFinSubPage(page) {
   if (bw) bw.classList.toggle('active', page === 'weekly');
   if (bc) bc.classList.toggle('active', page === 'cumulative');
   if (page === 'cumulative') renderFinCumulativePage();
+}
+
+// ==== Invoice History ====
+
+let _invHistCollapsed = false;
+
+function toggleInvoiceHistory() {
+  _invHistCollapsed = !_invHistCollapsed;
+  const body = document.getElementById('invoiceHistoryBody');
+  const btn  = document.getElementById('invHistToggleBtn');
+  if (body) body.style.display = _invHistCollapsed ? 'none' : '';
+  if (btn)  btn.textContent = _invHistCollapsed ? '▼ Expand' : '▲ Collapse';
+}
+
+async function loadInvoiceHistory() {
+  const container = document.getElementById('invoiceHistoryBody');
+  const badge     = document.getElementById('invHistBadge');
+  if (!container) return;
+  if (!_sb || !currentUser) {
+    container.innerHTML = '<div class="inv-hist-empty">Sign in to view invoice history.</div>';
+    return;
+  }
+  container.innerHTML = '<div class="inv-hist-empty">Loading…</div>';
+  try {
+    // Fetch all invoice_emp_* keys from app_config
+    const { data: rows, error } = await _sb
+      .from('app_config')
+      .select('key, value, updated_at')
+      .like('key', 'invoice_emp_%')
+      .order('key', { ascending: false });
+
+    if (error) throw error;
+
+    if (!rows || rows.length === 0) {
+      container.innerHTML = '<div class="inv-hist-empty">No invoices on record yet. Upload an invoice to get started.</div>';
+      if (badge) badge.textContent = '';
+      return;
+    }
+
+    if (badge) badge.textContent = rows.length + ' invoice' + (rows.length > 1 ? 's' : '') + ' on file';
+
+    const fmt = n => '$' + (n||0).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+    const fmtDate = s => { try { return new Date(s).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit'}); } catch(e) { return s||'—'; } };
+
+    const tableRows = rows.map(row => {
+      const week = row.key.replace('invoice_emp_', '');
+      const inv  = row.value || {};
+      const isCurrent = week === _finCurrentWeek;
+      const empCount = (inv.employees || []).length;
+      const updatedAt = fmtDate(row.updated_at);
+      return `<tr class="${isCurrent ? 'inv-hist-active' : ''}" id="invHistRow_${week}">
+        <td>
+          <div style="font-weight:600;font-size:12px;">${week}</div>
+          ${isCurrent ? '<span style="font-size:10px;background:#dcfce7;color:#166534;padding:1px 6px;border-radius:8px;">Current</span>' : ''}
+        </td>
+        <td><strong>${inv.invoice_no || '—'}</strong></td>
+        <td style="font-size:12px;">${inv.pay_period_start||'—'} – ${inv.pay_period_end||'—'}</td>
+        <td style="text-align:center;">${empCount}</td>
+        <td><strong>${fmt(inv.grand_total)}</strong></td>
+        <td style="font-size:11px;color:var(--muted);">${updatedAt}</td>
+        <td>
+          <div style="display:flex;gap:6px;">
+            <button class="btn-light" style="font-size:11px;padding:4px 10px;" onclick="editInvoice('${week}')">✏️ Edit</button>
+            <button class="btn-light" style="font-size:11px;padding:4px 10px;color:var(--bad);border-color:#fca5a5;" onclick="deleteInvoice('${week}')">🗑 Delete</button>
+          </div>
+        </td>
+      </tr>`;
+    }).join('');
+
+    container.innerHTML = `
+      <table class="inv-hist-table">
+        <thead>
+          <tr>
+            <th>Week</th>
+            <th>Invoice #</th>
+            <th>Pay Period</th>
+            <th style="text-align:center;">Employees</th>
+            <th>Total Payroll</th>
+            <th>Applied</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>${tableRows}</tbody>
+      </table>`;
+  } catch(e) {
+    container.innerHTML = '<div class="inv-hist-empty" style="color:var(--bad);">Error loading history: ' + e.message + '</div>';
+    console.error('Invoice history load failed', e);
+  }
+}
+
+function editInvoice(week) {
+  // Navigate the financials week to the selected invoice and reload
+  _finCurrentWeek = week;
+  _invoiceEditorWeek = null;  // force unconditional restore
+  _updateFinWeekLabel();
+  switchFinSubPage('weekly');
+  renderFinancialsTab();
+  // Scroll to chart card
+  setTimeout(() => { const el = document.getElementById('costChartCard'); if (el) el.scrollIntoView({behavior:'smooth',block:'start'}); }, 400);
+}
+
+async function deleteInvoice(week) {
+  const inv = invoiceCacheByWeek[week] ||
+    (() => { try { const r = localStorage.getItem('cs_inv_' + week); return r ? JSON.parse(r) : null; } catch(e) { return null; } })();
+  const invNo = inv ? inv.invoice_no : 'this week';
+  if (!confirm('Delete invoice ' + invNo + ' (week of ' + week + ')?
+
+This will remove the employee breakdown and zero out the payroll total for this week. Revenue, overhead, and other fields are kept.
+
+This cannot be undone.')) return;
+
+  try {
+    if (_sb && currentUser) {
+      // Remove from app_config
+      await _sb.from('app_config').delete().eq('key', 'invoice_emp_' + week);
+      // Zero payroll in financials_weekly (keep revenue/overhead intact)
+      await _sb.from('financials_weekly').update({
+        payroll_total: 0,
+        payroll_by_dept: {},
+        notes: 'Invoice deleted',
+        updated_by: currentUser.email,
+      }).eq('week_iso', week);
+    }
+  } catch(e) { console.error('Delete failed', e); alert('Delete failed: ' + e.message); return; }
+
+  // Clear local caches
+  delete invoiceCacheByWeek[week];
+  try { localStorage.removeItem('cs_inv_' + week); } catch(e) {}
+  if (financialsData[week]) { financialsData[week].payroll_total = 0; financialsData[week].payroll_by_dept = {}; }
+
+  // If currently viewing that week, reset invoice UI
+  if (_finCurrentWeek === week) {
+    invoiceParsed = null;
+    _invoiceEditorWeek = null;
+    _restoreInvoiceForWeek(week);
+    renderFinancialKPIs();
+  }
+
+  // Refresh history table
+  loadInvoiceHistory();
 }
 
 // ==== Editable Invoice Editor ====
@@ -5234,6 +5400,8 @@ async function applyInvoice() {
   renderEditableInvoiceTable(data);
   runInvoiceValidation(data);
   renderCostCharts();
+  // Refresh history panel
+  loadInvoiceHistory();
 }
 
 function clearInvoicePreview() {
